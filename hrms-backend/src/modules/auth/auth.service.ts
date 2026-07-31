@@ -186,6 +186,27 @@ export async function adminResetPassword(
   target.refreshTokenHash = null;
   await target.save();
 
+  // Same "always send" type forgotPassword uses below — this is a
+  // credential-delivery email, not a preference-gated notification, so it
+  // shouldn't be silently skipped just because an admin turned off the
+  // EMPLOYEE_CREATED/etc. toggles.
+  await notifyUser({
+    user: toId(target),
+    type: NOTIFICATION_TYPES.PASSWORD_RESET,
+    title: "Your password was reset",
+    message: "An administrator reset your HRMS password — check your email for new sign-in details.",
+    email: {
+      template: "credentials-resend",
+      data: {
+        fullName: target.fullName,
+        employeeId: target.employeeId,
+        email: target.email,
+        tempPassword,
+        loginUrl: `${env.clientOrigin}/login`,
+      },
+    },
+  });
+
   return { tempPassword, user: toPublicUser(target) };
 }
 

@@ -19,6 +19,8 @@ interface TempPasswordDialogProps {
   employeeId: string;
   tempPassword: string;
   onClose: () => void;
+  title?: string;
+  description?: React.ReactNode;
 }
 
 export function TempPasswordDialog({
@@ -27,6 +29,8 @@ export function TempPasswordDialog({
   employeeId,
   tempPassword,
   onClose,
+  title,
+  description,
 }: TempPasswordDialogProps) {
   const [copied, setCopied] = useState(false);
 
@@ -40,11 +44,16 @@ export function TempPasswordDialog({
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{employeeName} was created</DialogTitle>
+          <DialogTitle>{title ?? `${employeeName} was created`}</DialogTitle>
           <DialogDescription>
-            Employee ID <span className="font-mono font-medium text-foreground">{employeeId}</span> was
-            assigned automatically. Share this temporary password with them directly — it will not
-            be shown again.
+            {description ?? (
+              <>
+                Employee ID{" "}
+                <span className="font-mono font-medium text-foreground">{employeeId}</span> was
+                assigned automatically. Share this temporary password with them directly — it will
+                not be shown again.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, BadgeCheck, Pencil, Power, PowerOff, Trash2 } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Mail, Pencil, Power, PowerOff, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -19,8 +19,10 @@ import { useAuth } from "@/hooks/use-auth";
 import { ROLES } from "@/constants/roles";
 import { ROUTES } from "@/constants/routes";
 import * as employeeService from "@/services/employee.service";
+import * as authService from "@/services/auth.service";
 import { EmployeeProfileView } from "@/features/employees/components/employee-profile-view";
 import { EditEmployeeForm } from "@/features/employees/components/edit-employee-form";
+import { TempPasswordDialog } from "@/features/employees/components/temp-password-dialog";
 
 export default function EmployeeDetailPage() {
   return (
@@ -39,6 +41,8 @@ function EmployeeDetailContent() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [promoteConfirmOpen, setPromoteConfirmOpen] = useState(false);
+  const [resendConfirmOpen, setResendConfirmOpen] = useState(false);
+  const [resendTempPassword, setResendTempPassword] = useState<string | null>(null);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["employee", params.id],
@@ -76,6 +80,19 @@ function EmployeeDetailContent() {
     },
   });
 
+  const resendMutation = useMutation({
+    mutationFn: () => authService.adminResetPassword(params.id),
+    onSuccess: (res) => {
+      toast.success(`New login email sent to ${data?.fullName}`);
+      setResendTempPassword(res.data.tempPassword);
+      setResendConfirmOpen(false);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+      setResendConfirmOpen(false);
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: () => employeeService.deleteEmployee(params.id),
     onSuccess: () => {
@@ -92,6 +109,17 @@ function EmployeeDetailContent() {
   // Mirrors the backend's rule: any Admin or Super Admin can delete an
   // Employee or Admin account — never a Super Admin, never their own.
   const canDelete = !!user && !!data && user.id !== data.id && data.role !== ROLES.SUPER_ADMIN;
+
+  // Mirrors adminResetPassword's backend rules (never a Super Admin target,
+  // only a Super Admin may reset an Admin's password), plus a UI-only
+  // guard against resetting your own — it force-logs-out the target's
+  // session, which you don't want to do to yourself by mistake.
+  const canResendCredentials =
+    !!user &&
+    !!data &&
+    user.id !== data.id &&
+    data.role !== ROLES.SUPER_ADMIN &&
+    (data.role !== ROLES.ADMIN || user.role === ROLES.SUPER_ADMIN);
 
   if (isLoading) {
     return (
@@ -131,6 +159,12 @@ function EmployeeDetailContent() {
             <Pencil className="h-4 w-4" />
             Edit
           </Button>
+          {canResendCredentials && (
+            <Button variant="outline" onClick={() => setResendConfirmOpen(true)}>
+              <Mail className="h-4 w-4" />
+              Resend Login Email
+            </Button>
+          )}
           {data.employmentType === "PROBATION" && (
             <Button variant="outline" onClick={() => setPromoteConfirmOpen(true)}>
               <BadgeCheck className="h-4 w-4" />
@@ -180,6 +214,34 @@ function EmployeeDetailContent() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <ConfirmDialog
+        open={resendConfirmOpen}
+        onOpenChange={setResendConfirmOpen}
+        title="Resend login email?"
+        description={`This generates a new temporary password for ${data.fullName} and emails their sign-in details again. Their current password stops working immediately, and any active session of theirs is signed out.`}
+        confirmLabel="Resend"
+        isLoading={resendMutation.isPending}
+        onConfirm={() => resendMutation.mutate()}
+      />
+
+      {resendTempPassword && (
+        <TempPasswordDialog
+          open
+          employeeName={data.fullName}
+          employeeId={data.employeeId}
+          tempPassword={resendTempPassword}
+          title="Login email resent"
+          description={
+            <>
+              A new login email was sent to {data.fullName}. Their old password no longer works.
+              Here&apos;s the new temporary password as a backup in case the email doesn&apos;t
+              arrive — it will not be shown again.
+            </>
+          }
+          onClose={() => setResendTempPassword(null)}
+        />
+      )}
 
       <ConfirmDialog
         open={confirmOpen}
