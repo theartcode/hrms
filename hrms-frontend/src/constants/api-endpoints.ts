@@ -20,6 +20,9 @@ export const API_ENDPOINTS = {
     ACTIVATE: (id: string) => `/employees/${id}/activate`,
     DEACTIVATE: (id: string) => `/employees/${id}/deactivate`,
     PROMOTE_TO_PERMANENT: (id: string) => `/employees/${id}/promote-to-permanent`,
+    SUBMIT_PAYMENT_INFO: "/employees/me/payment-info",
+    APPROVE_PAYMENT_INFO: (id: string) => `/employees/${id}/payment-info/approve`,
+    REJECT_PAYMENT_INFO: (id: string) => `/employees/${id}/payment-info/reject`,
   },
   DEPARTMENTS: {
     LIST: "/departments",
@@ -35,6 +38,13 @@ export const API_ENDPOINTS = {
     UPDATE: (id: string) => `/designations/${id}`,
     ACTIVATE: (id: string) => `/designations/${id}/activate`,
     DEACTIVATE: (id: string) => `/designations/${id}/deactivate`,
+  },
+  LOCATIONS: {
+    LIST: "/locations",
+    CREATE: "/locations",
+    UPDATE: (id: string) => `/locations/${id}`,
+    ACTIVATE: (id: string) => `/locations/${id}/activate`,
+    DEACTIVATE: (id: string) => `/locations/${id}/deactivate`,
   },
   ATTENDANCE: {
     CHECK_IN: "/attendance/check-in",
@@ -63,6 +73,12 @@ export const API_ENDPOINTS = {
     APPROVE: (id: string) => `/leaves/${id}/approve`,
     REJECT: (id: string) => `/leaves/${id}/reject`,
     ALLOCATIONS: "/leaves/allocations",
+    MIGRATION_IMPORT: (employeeId: string) => `/leaves/migrations/${employeeId}/import`,
+    MIGRATION_DELETE_BATCH: (employeeId: string, batchId: string) =>
+      `/leaves/migrations/${employeeId}/import-batches/${batchId}`,
+    MIGRATION_ANALYSIS: (employeeId: string) => `/leaves/migrations/${employeeId}/analysis`,
+    MIGRATION_CONFIRM: (employeeId: string) => `/leaves/migrations/${employeeId}/confirm`,
+    MIGRATION_REOPEN: (employeeId: string) => `/leaves/migrations/${employeeId}/reopen`,
   },
   HOLIDAYS: {
     LIST: "/holidays",

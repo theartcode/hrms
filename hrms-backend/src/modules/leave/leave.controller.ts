@@ -84,6 +84,46 @@ async function deleteAllocation(req: Request, res: Response): Promise<void> {
   sendSuccess(res, result, "Leave allocation deleted successfully");
 }
 
+async function importHistory(req: Request, res: Response): Promise<void> {
+  const result = await leaveService.importHistoricalLeave(
+    req.user!,
+    String(req.params.employeeId),
+    req.body
+  );
+  sendSuccess(res, result, "Leave history imported successfully", 201);
+}
+
+async function deleteImportBatch(req: Request, res: Response): Promise<void> {
+  const result = await leaveService.deleteImportBatch(
+    req.user!,
+    String(req.params.employeeId),
+    String(req.params.batchId)
+  );
+  sendSuccess(res, result, "Import batch deleted");
+}
+
+async function migrationAnalysis(req: Request, res: Response): Promise<void> {
+  const result = await leaveService.getLeaveMigrationAnalysis(String(req.params.employeeId));
+  sendSuccess(res, result);
+}
+
+async function confirmMigration(req: Request, res: Response): Promise<void> {
+  const result = await leaveService.confirmLeaveMigration(
+    req.user!,
+    String(req.params.employeeId),
+    req.body
+  );
+  sendSuccess(res, result, "Leave migration confirmed");
+}
+
+async function reopenMigration(req: Request, res: Response): Promise<void> {
+  const result = await leaveService.reopenLeaveMigration(
+    req.user!,
+    String(req.params.employeeId)
+  );
+  sendSuccess(res, result, "Leave migration reopened");
+}
+
 export {
   apply,
   mine,
@@ -96,4 +136,9 @@ export {
   listAllocations,
   updateAllocation,
   deleteAllocation,
+  importHistory,
+  deleteImportBatch,
+  migrationAnalysis,
+  confirmMigration,
+  reopenMigration,
 };

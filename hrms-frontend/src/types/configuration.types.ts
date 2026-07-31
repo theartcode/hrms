@@ -14,6 +14,7 @@ export interface OfficeSettings {
   gracePeriodMinutes: number;
   workingDays: number[];
   weekendDays: number[];
+  defaultProbationMonths: number;
 }
 
 export interface LeavePolicy {
@@ -38,6 +39,7 @@ export interface NotificationEventToggles {
   EMPLOYEE_CREATED: boolean;
   BIRTHDAY: boolean;
   WORK_ANNIVERSARY: boolean;
+  PROBATION_ENDING: boolean;
 }
 
 export interface NotificationSettings {

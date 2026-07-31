@@ -163,7 +163,7 @@ function EmployeeDetailContent() {
       />
 
       <Sheet open={editOpen} onOpenChange={setEditOpen}>
-        <SheetContent className="overflow-y-auto p-6">
+        <SheetContent className="w-full overflow-y-auto p-6 data-[side=right]:sm:max-w-2xl">
           <SheetHeader className="p-0">
             <SheetTitle>Edit Employee</SheetTitle>
           </SheetHeader>

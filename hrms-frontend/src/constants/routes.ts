@@ -31,6 +31,7 @@ export const ROUTES = {
   ADMINISTRATION_GENERAL_SETTINGS: "/administration/general-settings",
   ADMINISTRATION_DEPARTMENTS: "/administration/departments",
   ADMINISTRATION_DESIGNATIONS: "/administration/designations",
+  ADMINISTRATION_LOCATIONS: "/administration/locations",
   ADMINISTRATION_HOLIDAYS: "/administration/holidays",
   ADMINISTRATION_ADOBE_LICENSES: "/administration/adobe-licenses",
   ADMINISTRATION_LEAVE_MANAGEMENT: "/administration/leave-management",

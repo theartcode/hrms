@@ -23,6 +23,7 @@ const EVENT_LABELS: Record<keyof NotificationSettings["events"], string> = {
   EMPLOYEE_CREATED: "Employee Created",
   BIRTHDAY: "Birthday",
   WORK_ANNIVERSARY: "Work Anniversary",
+  PROBATION_ENDING: "Probation Ending",
 };
 
 export default function NotificationSettingsPage() {

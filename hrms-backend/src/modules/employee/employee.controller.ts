@@ -91,6 +91,28 @@ async function listAssignable(req: Request, res: Response): Promise<void> {
   sendSuccess(res, { employees });
 }
 
+async function submitPaymentInfo(req: Request, res: Response): Promise<void> {
+  const employee = await employeeService.submitPaymentInfoChange(req.user!, req.body);
+  sendSuccess(res, { employee }, "Bank details submitted for approval");
+}
+
+async function approvePaymentInfo(req: Request, res: Response): Promise<void> {
+  const employee = await employeeService.approvePaymentInfoChange(
+    req.user!,
+    String(req.params.id)
+  );
+  sendSuccess(res, { employee }, "Bank details approved");
+}
+
+async function rejectPaymentInfo(req: Request, res: Response): Promise<void> {
+  const employee = await employeeService.rejectPaymentInfoChange(
+    req.user!,
+    String(req.params.id),
+    req.body.comment
+  );
+  sendSuccess(res, { employee }, "Bank details change rejected");
+}
+
 export {
   list,
   create,
@@ -103,4 +125,7 @@ export {
   getMe,
   updateMe,
   listAssignable,
+  submitPaymentInfo,
+  approvePaymentInfo,
+  rejectPaymentInfo,
 };

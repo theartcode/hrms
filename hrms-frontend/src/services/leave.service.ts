@@ -1,6 +1,14 @@
 import { apiFetch } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/constants/api-endpoints";
-import { LeaveBalance, LeaveRequest, PaginationInfo } from "@/types/leave.types";
+import {
+  AdjustableBalanceField,
+  ImportLeaveHistoryRow,
+  LeaveBalance,
+  LeaveImportSource,
+  LeaveMigrationAnalysis,
+  LeaveRequest,
+  PaginationInfo,
+} from "@/types/leave.types";
 
 type ApiSuccess<T> = { success: true; message: string; data: T };
 
@@ -140,5 +148,45 @@ export function deleteLeaveAllocation(id: string) {
     {
       method: "DELETE",
     }
+  );
+}
+
+export function importLeaveHistory(
+  employeeId: string,
+  input: { source: LeaveImportSource; sourceFilename?: string; rows: ImportLeaveHistoryRow[] }
+) {
+  return apiFetch<ApiSuccess<{ importBatchId: string; importedCount: number }>>(
+    API_ENDPOINTS.LEAVES.MIGRATION_IMPORT(employeeId),
+    { method: "POST", body: JSON.stringify(input) }
+  );
+}
+
+export function deleteImportBatch(employeeId: string, batchId: string) {
+  return apiFetch<ApiSuccess<{ deletedCount: number }>>(
+    API_ENDPOINTS.LEAVES.MIGRATION_DELETE_BATCH(employeeId, batchId),
+    { method: "DELETE" }
+  );
+}
+
+export function getLeaveMigrationAnalysis(employeeId: string) {
+  return apiFetch<ApiSuccess<LeaveMigrationAnalysis>>(
+    API_ENDPOINTS.LEAVES.MIGRATION_ANALYSIS(employeeId)
+  );
+}
+
+export function confirmLeaveMigration(
+  employeeId: string,
+  input: { reason: string; adjustments: { field: AdjustableBalanceField; newValue: number }[] }
+) {
+  return apiFetch<ApiSuccess<{ employeeId: string; leaveMigrationStatus: string }>>(
+    API_ENDPOINTS.LEAVES.MIGRATION_CONFIRM(employeeId),
+    { method: "POST", body: JSON.stringify(input) }
+  );
+}
+
+export function reopenLeaveMigration(employeeId: string) {
+  return apiFetch<ApiSuccess<{ employeeId: string; leaveMigrationStatus: string }>>(
+    API_ENDPOINTS.LEAVES.MIGRATION_REOPEN(employeeId),
+    { method: "POST" }
   );
 }

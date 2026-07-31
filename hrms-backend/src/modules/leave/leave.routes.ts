@@ -7,7 +7,11 @@ import {
   adminListLeavesSchema,
   applyLeaveSchema,
   balanceQuerySchema,
+  confirmLeaveMigrationSchema,
+  deleteImportBatchSchema,
+  employeeIdParamSchema,
   grantExtraLeaveSchema,
+  importLeaveHistorySchema,
   leaveIdParamSchema,
   listLeavesSchema,
   reviewLeaveSchema,
@@ -17,6 +21,7 @@ import * as leaveController from "./leave.controller";
 
 const router = Router();
 const manage = authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN);
+const superAdminOnly = authorize(ROLES.SUPER_ADMIN);
 
 router.use(authenticate);
 
@@ -55,6 +60,41 @@ router.patch(
   manage,
   validate(reviewLeaveSchema),
   leaveController.reject
+);
+
+// Leave Analysis & Migration — gates the allocation routes above (see the
+// leaveMigrationStatus guard inside grantExtraLeave/updateLeaveAllocation/
+// deleteLeaveAllocation in leave.service.ts), never the day-to-day
+// apply/approve/reject/cancel routes above.
+router.post(
+  "/migrations/:employeeId/import",
+  manage,
+  validate(importLeaveHistorySchema),
+  leaveController.importHistory
+);
+router.delete(
+  "/migrations/:employeeId/import-batches/:batchId",
+  manage,
+  validate(deleteImportBatchSchema),
+  leaveController.deleteImportBatch
+);
+router.get(
+  "/migrations/:employeeId/analysis",
+  manage,
+  validate(employeeIdParamSchema),
+  leaveController.migrationAnalysis
+);
+router.post(
+  "/migrations/:employeeId/confirm",
+  manage,
+  validate(confirmLeaveMigrationSchema),
+  leaveController.confirmMigration
+);
+router.post(
+  "/migrations/:employeeId/reopen",
+  superAdminOnly,
+  validate(employeeIdParamSchema),
+  leaveController.reopenMigration
 );
 
 export default router;

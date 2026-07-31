@@ -76,18 +76,27 @@ export function LeaveBalanceCard({ employeeId }: LeaveBalanceCardProps) {
               total={data?.casualPaid.half2.total ?? null}
               colorClass="bg-emerald-600"
             />
-            <BalanceRow
-              label="Annual Leave"
-              used={data?.annual.used ?? 0}
-              total={data?.annual.accrued ?? 0}
-              colorClass="bg-violet-500"
-            />
-            <BalanceRow
-              label="Comp Off Leave"
-              used={data?.compOff?.used ?? 0}
-              total={data?.compOff?.granted ?? 0}
-              colorClass="bg-amber-500"
-            />
+            {/* Annual Leave only accrues once Permanent — the row simply
+                doesn't exist for a Probation employee. */}
+            {data?.employmentType === "PERMANENT" && (
+              <BalanceRow
+                label="Annual Leave"
+                used={data.annual.used}
+                total={data.annual.accrued}
+                colorClass="bg-violet-500"
+              />
+            )}
+            {/* Only visible to employees who've actually been granted Comp
+                Off — most employees never have, and showing a permanent
+                "0 / 0" for them is just noise. */}
+            {data?.compOff?.hasAnyGrant && (
+              <BalanceRow
+                label="Comp Off Leave"
+                used={data.compOff.used}
+                total={data.compOff.granted}
+                colorClass="bg-amber-500"
+              />
+            )}
             <BalanceRow
               label="Unpaid Leave"
               used={data?.unpaid.used ?? 0}

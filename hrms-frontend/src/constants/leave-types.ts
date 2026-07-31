@@ -17,3 +17,12 @@ export const LEAVE_REQUEST_STATUS = {
 
 export type LeaveRequestStatus =
   (typeof LEAVE_REQUEST_STATUS)[keyof typeof LEAVE_REQUEST_STATUS];
+
+// Deliberately excludes PENDING — a still-open row from a retired system
+// is a live business problem to resolve before import, not migration data.
+export const LEAVE_IMPORT_STATUS = {
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+  CANCELLED: "CANCELLED",
+} as const;
+export type LeaveImportStatus = (typeof LEAVE_IMPORT_STATUS)[keyof typeof LEAVE_IMPORT_STATUS];

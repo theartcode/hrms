@@ -24,6 +24,31 @@ export interface AssignableEmployee {
   department: { _id: string; name: string } | null;
 }
 
+// The minimal shape the `manager` populate() selects — not a full Employee.
+// Uses `_id` (not `id`), same as `department`/`designation`, since this is
+// the raw populated Mongoose subdocument, not run through toId().
+export interface ManagerRef {
+  _id: string;
+  fullName: string;
+  employeeId: string;
+}
+
+export interface PaymentInfo {
+  ifscCode: string;
+  accountNumber: string;
+  accountHolderName: string;
+}
+
+export interface StatutoryInfo {
+  pan: string | null;
+  pfStatus: string;
+  pfUan: string | null;
+  professionalTaxStatus: string;
+  lwfStatus: string;
+  esicStatus: string;
+  esicIpNumber: string | null;
+}
+
 export interface Employee {
   id: string;
   employeeId: string;
@@ -43,8 +68,28 @@ export interface Employee {
   gracePeriodOverrideMinutes: number | null;
   employmentType: EmploymentType;
   permanentSince: string | null;
+  probationEndDate: string | null;
+  probationEndNotifiedAt: string | null;
   salary?: number | null;
   bloodGroup?: string | null;
+  manager: ManagerRef | null;
+  location: ReferenceData | null;
+  gender: string | null;
+  whatsappEnabled: boolean;
+  shiftStartTime: string | null;
+  shiftEndTime: string | null;
+  numberOfBonuses: number | null;
+  advanceSalaryBalance: number | null;
+  advanceSalaryEmi: number | null;
+  paymentInfo: PaymentInfo | null;
+  statutoryInfo: StatutoryInfo | null;
+  // Set once the employee submits a bank details change of their own —
+  // stays populated (status APPROVED/REJECTED) after review so the profile
+  // can still show "last change was rejected: ...", not just while pending.
+  pendingPaymentInfo: PaymentInfo | null;
+  paymentInfoReviewStatus: "PENDING" | "APPROVED" | "REJECTED" | null;
+  paymentInfoReviewedAt: string | null;
+  paymentInfoReviewComment: string | null;
   createdAt: string;
 }
 

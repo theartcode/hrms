@@ -75,6 +75,16 @@ function OfficeSettingsForm({ config }: { config: Configuration }) {
           onChange={(gracePeriodMinutes) => setDraft({ ...draft, gracePeriodMinutes })}
           description="Check-ins within this window after start time still count as On Time."
         />
+        <NumberInput
+          id="default-probation-months"
+          label="Default Probation Period"
+          suffix="months"
+          value={draft.defaultProbationMonths}
+          min={0}
+          max={24}
+          onChange={(defaultProbationMonths) => setDraft({ ...draft, defaultProbationMonths })}
+          description="Auto-fills a new employee's probation end date (joining date + this many months). Editable per employee afterward."
+        />
       </SettingsSection>
 
       <SettingsSection title="Working Week">

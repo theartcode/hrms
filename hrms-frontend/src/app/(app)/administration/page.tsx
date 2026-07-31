@@ -4,6 +4,7 @@ import {
   Building2,
   Network,
   BriefcaseBusiness,
+  MapPin,
   Clock,
   CalendarHeart,
   CalendarDays,
@@ -37,6 +38,12 @@ const CATEGORIES = [
     description: "Job designations employees can be assigned to.",
     href: ROUTES.ADMINISTRATION_DESIGNATIONS,
     icon: BriefcaseBusiness,
+  },
+  {
+    title: "Locations",
+    description: "Office locations employees can be assigned to.",
+    href: ROUTES.ADMINISTRATION_LOCATIONS,
+    icon: MapPin,
   },
   {
     title: "Office Settings",

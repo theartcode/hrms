@@ -1,4 +1,5 @@
 import { LeaveRequestStatus } from "@/constants/leave-types";
+import { AdjustableBalanceField } from "@/types/leave.types";
 
 export const LEAVE_STATUS_LABELS: Record<LeaveRequestStatus, string> = {
   PENDING: "Pending",
@@ -20,4 +21,21 @@ export const LEAVE_TYPE_LABELS: Record<string, string> = {
   ANNUAL: "Annual Leave",
   UNPAID: "Unpaid Leave",
   COMP_OFF: "Comp Off Leave",
+};
+
+export const ADJUSTABLE_FIELD_LABELS: Record<AdjustableBalanceField, string> = {
+  sickUsedH1: "Sick Leave Used (Jan–Jun)",
+  sickUsedH2: "Sick Leave Used (Jul–Dec)",
+  sickExtraH1: "Sick Leave Extra (Jan–Jun)",
+  sickExtraH2: "Sick Leave Extra (Jul–Dec)",
+  casualPaidUsedH1: "Casual Leave Used (Jan–Jun)",
+  casualPaidUsedH2: "Casual Leave Used (Jul–Dec)",
+  casualPaidExtraH1: "Casual Leave Extra (Jan–Jun)",
+  casualPaidExtraH2: "Casual Leave Extra (Jul–Dec)",
+  annualAccrued: "Annual Leave Accrued",
+  annualExtra: "Annual Leave Extra",
+  annualUsed: "Annual Leave Used",
+  unpaidUsed: "Unpaid Leave Used",
+  compOffGranted: "Comp Off Granted",
+  compOffUsed: "Comp Off Used",
 };

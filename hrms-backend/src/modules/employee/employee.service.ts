@@ -18,7 +18,9 @@ import { notifyAdmins, notifyUser } from "../notifications/notifications.service
 import { NotificationModel } from "../notifications/notification.model";
 import { DepartmentModel } from "../department/department.model";
 import { DesignationModel } from "../designation/designation.model";
-import { IUser, UserModel } from "../user/user.model";
+import { LocationModel } from "../location/location.model";
+import { getOfficeSettings } from "../configuration/configuration.cache";
+import { IUser, PAYMENT_INFO_REVIEW_STATUS, UserModel } from "../user/user.model";
 import { CounterModel } from "../../shared/models/counter.model";
 import { AttendanceModel } from "../attendance/attendance.model";
 import { AttendanceCorrectionModel } from "../attendance-correction/attendance-correction.model";
@@ -29,6 +31,12 @@ import { purgeAllDocumentsForEmployee } from "../documents/document.service";
 const EMPLOYEE_ID_PREFIX = "EMP-";
 const EMPLOYEE_ID_PAD = 4;
 const EMPLOYEE_ID_COUNTER = "employeeId";
+
+function addMonths(date: Date, months: number): Date {
+  const result = new Date(date);
+  result.setMonth(result.getMonth() + months);
+  return result;
+}
 
 interface Actor {
   id: string;
@@ -68,8 +76,29 @@ function toPublicEmployee(user: IUser) {
     gracePeriodOverrideMinutes: user.gracePeriodOverrideMinutes,
     employmentType: user.employmentType,
     permanentSince: user.permanentSince,
+    probationEndDate: user.probationEndDate,
+    probationEndNotifiedAt: user.probationEndNotifiedAt,
     salary: user.salary ?? null,
     bloodGroup: user.bloodGroup ?? null,
+    manager: user.manager,
+    location: user.location,
+    gender: user.gender ?? null,
+    whatsappEnabled: user.whatsappEnabled,
+    shiftStartTime: user.shiftStartTime ?? null,
+    shiftEndTime: user.shiftEndTime ?? null,
+    numberOfBonuses: user.numberOfBonuses ?? null,
+    advanceSalaryBalance: user.advanceSalaryBalance ?? null,
+    advanceSalaryEmi: user.advanceSalaryEmi ?? null,
+    paymentInfo: user.paymentInfo ?? null,
+    statutoryInfo: user.statutoryInfo ?? null,
+    pendingPaymentInfo: user.pendingPaymentInfo ?? null,
+    paymentInfoReviewStatus: user.paymentInfoReviewStatus ?? null,
+    paymentInfoReviewedAt: user.paymentInfoReviewedAt ?? null,
+    paymentInfoReviewComment: user.paymentInfoReviewComment ?? null,
+    leaveMigrationStatus: user.leaveMigrationStatus,
+    leaveMigrationConfirmedBy: user.leaveMigrationConfirmedBy,
+    leaveMigrationConfirmedAt: user.leaveMigrationConfirmedAt,
+    leaveMigrationConfirmedReason: user.leaveMigrationConfirmedReason,
     createdAt: user.createdAt,
   };
 }
@@ -77,6 +106,8 @@ function toPublicEmployee(user: IUser) {
 const POPULATE_FIELDS = [
   { path: "department", select: "name isActive" },
   { path: "designation", select: "name isActive" },
+  { path: "manager", select: "fullName employeeId" },
+  { path: "location", select: "name isActive" },
 ];
 
 export async function listEmployees(query: ListQuery) {
@@ -240,6 +271,15 @@ export async function createEmployee(actor: Actor, input: CreateEmployeeInput) {
   const tempPassword = generateTempPassword();
   const passwordHash = await hashSecret(tempPassword);
 
+  // Every new employee starts on Probation (employmentType isn't even
+  // settable via createEmployeeSchema) — auto-fill the end date from the
+  // company default so admins never have to remember to set it manually;
+  // it stays editable afterward via updateEmployee.
+  const probationEndDate = addMonths(
+    input.joiningDate,
+    getOfficeSettings().defaultProbationMonths
+  );
+
   let user: IUser;
   try {
     user = await UserModel.create({
@@ -255,6 +295,7 @@ export async function createEmployee(actor: Actor, input: CreateEmployeeInput) {
       status: input.status,
       salary: input.salary ?? null,
       bloodGroup: input.bloodGroup ?? null,
+      probationEndDate,
       passwordHash,
       mustChangePassword: true,
     });
@@ -334,12 +375,25 @@ interface UpdateEmployeeInput {
   phone?: string;
   department?: string;
   designation?: string;
+  joiningDate?: Date;
+  probationEndDate?: Date | null;
   dateOfBirth?: Date;
   gracePeriodOverrideMinutes?: number | null;
   role?: Role;
   status?: EmployeeStatus;
   salary?: number | null;
   bloodGroup?: string | null;
+  manager?: string | null;
+  location?: string | null;
+  gender?: string | null;
+  whatsappEnabled?: boolean;
+  shiftStartTime?: string | null;
+  shiftEndTime?: string | null;
+  numberOfBonuses?: number | null;
+  advanceSalaryBalance?: number | null;
+  advanceSalaryEmi?: number | null;
+  paymentInfo?: IUser["paymentInfo"];
+  statutoryInfo?: IUser["statutoryInfo"];
 }
 
 export async function updateEmployee(
@@ -375,6 +429,18 @@ export async function updateEmployee(
     );
   }
 
+  if (input.manager) {
+    if (input.manager === id) {
+      throw new ApiError(400, "An employee cannot be their own manager");
+    }
+    const manager = await UserModel.findById(input.manager);
+    if (!manager) throw new ApiError(400, "Selected manager does not exist");
+  }
+  if (input.location) {
+    const location = await LocationModel.findById(input.location);
+    if (!location) throw new ApiError(400, "Selected location does not exist");
+  }
+
   const previousStatus = user.status;
 
   if (input.employeeId !== undefined && input.employeeId !== user.employeeId) {
@@ -388,6 +454,14 @@ export async function updateEmployee(
   if (input.phone !== undefined) user.phone = input.phone;
   if (input.department !== undefined) user.department = input.department as never;
   if (input.designation !== undefined) user.designation = input.designation as never;
+  if (input.joiningDate !== undefined) user.joiningDate = input.joiningDate;
+  if (input.probationEndDate !== undefined) {
+    user.probationEndDate = input.probationEndDate;
+    // A newly-set (or newly-cleared) date deserves its own notification
+    // when it actually arrives — don't let a stale "already notified" flag
+    // from a previous date suppress that.
+    user.probationEndNotifiedAt = null;
+  }
   if (input.dateOfBirth !== undefined) user.dateOfBirth = input.dateOfBirth;
   if (input.gracePeriodOverrideMinutes !== undefined) {
     user.gracePeriodOverrideMinutes = input.gracePeriodOverrideMinutes;
@@ -396,6 +470,28 @@ export async function updateEmployee(
   if (input.bloodGroup !== undefined) user.bloodGroup = input.bloodGroup;
   if (input.role !== undefined) user.role = input.role;
   if (input.status !== undefined) user.status = input.status;
+  if (input.manager !== undefined) user.manager = input.manager as never;
+  if (input.location !== undefined) user.location = input.location as never;
+  if (input.gender !== undefined) user.gender = input.gender as never;
+  if (input.whatsappEnabled !== undefined) user.whatsappEnabled = input.whatsappEnabled;
+  if (input.shiftStartTime !== undefined) user.shiftStartTime = input.shiftStartTime;
+  if (input.shiftEndTime !== undefined) user.shiftEndTime = input.shiftEndTime;
+  if (input.numberOfBonuses !== undefined) user.numberOfBonuses = input.numberOfBonuses;
+  if (input.advanceSalaryBalance !== undefined)
+    user.advanceSalaryBalance = input.advanceSalaryBalance;
+  if (input.advanceSalaryEmi !== undefined) user.advanceSalaryEmi = input.advanceSalaryEmi;
+  if (input.paymentInfo !== undefined) {
+    user.paymentInfo = input.paymentInfo;
+    // An admin setting bank details directly supersedes any employee-
+    // submitted proposal awaiting review — leaving it in place would let a
+    // later approve/reject silently clobber what the admin just set.
+    user.pendingPaymentInfo = null;
+    user.paymentInfoReviewStatus = null;
+    user.paymentInfoReviewedBy = null;
+    user.paymentInfoReviewedAt = null;
+    user.paymentInfoReviewComment = null;
+  }
+  if (input.statutoryInfo !== undefined) user.statutoryInfo = input.statutoryInfo;
 
   if (
     input.status &&
@@ -578,5 +674,121 @@ export async function updateMyProfile(userId: string, input: UpdateProfileInput)
 
   await user.save();
   await user.populate(POPULATE_FIELDS);
+  return toPublicEmployee(user);
+}
+
+interface PaymentInfoInput {
+  ifscCode: string;
+  accountNumber: string;
+  accountHolderName: string;
+}
+
+// Self-service only — an admin changes bank details directly through
+// updateEmployee instead (see the pending-state reset there). The proposal
+// replaces whatever was previously pending; it never touches the live
+// `paymentInfo` used for payroll until an admin approves it below.
+export async function submitPaymentInfoChange(actor: Actor, input: PaymentInfoInput) {
+  const user = await UserModel.findById(actor.id);
+  if (!user) {
+    throw new ApiError(404, "Employee not found");
+  }
+
+  user.pendingPaymentInfo = input as never;
+  user.paymentInfoReviewStatus = PAYMENT_INFO_REVIEW_STATUS.PENDING;
+  user.paymentInfoReviewedBy = null;
+  user.paymentInfoReviewedAt = null;
+  user.paymentInfoReviewComment = null;
+  await user.save();
+  await user.populate(POPULATE_FIELDS);
+
+  await recordActivity({
+    actor,
+    action: ACTIVITY_ACTIONS.PAYMENT_INFO_SUBMITTED,
+    targetType: "User",
+    targetId: toId(user),
+    metadata: {},
+  });
+
+  await notifyAdmins(actor.id, {
+    type: NOTIFICATION_TYPES.PAYMENT_INFO_SUBMITTED,
+    title: "Bank details change awaiting approval",
+    message: `${user.fullName} (${user.employeeId}) submitted new bank details for approval`,
+    metadata: { employeeId: toId(user) },
+  });
+
+  return toPublicEmployee(user);
+}
+
+async function getPendingPaymentInfoForReview(id: string): Promise<IUser> {
+  const user = await UserModel.findById(id);
+  if (!user) {
+    throw new ApiError(404, "Employee not found");
+  }
+  if (user.paymentInfoReviewStatus !== PAYMENT_INFO_REVIEW_STATUS.PENDING || !user.pendingPaymentInfo) {
+    throw new ApiError(409, "There is no pending bank details change to review");
+  }
+  return user;
+}
+
+export async function approvePaymentInfoChange(actor: Actor, id: string) {
+  const user = await getPendingPaymentInfoForReview(id);
+
+  user.paymentInfo = user.pendingPaymentInfo;
+  user.pendingPaymentInfo = null;
+  user.paymentInfoReviewStatus = PAYMENT_INFO_REVIEW_STATUS.APPROVED;
+  user.paymentInfoReviewedBy = actor.id as never;
+  user.paymentInfoReviewedAt = new Date();
+  user.paymentInfoReviewComment = null;
+  await user.save();
+  await user.populate(POPULATE_FIELDS);
+
+  await recordActivity({
+    actor,
+    action: ACTIVITY_ACTIONS.PAYMENT_INFO_APPROVED,
+    targetType: "User",
+    targetId: toId(user),
+    metadata: {},
+  });
+
+  await notifyUser({
+    user: toId(user),
+    type: NOTIFICATION_TYPES.PAYMENT_INFO_APPROVED,
+    title: "Bank details approved",
+    message: "Your updated bank details were approved and are now active.",
+    metadata: {},
+  });
+
+  return toPublicEmployee(user);
+}
+
+export async function rejectPaymentInfoChange(actor: Actor, id: string, comment?: string) {
+  const user = await getPendingPaymentInfoForReview(id);
+
+  user.pendingPaymentInfo = null;
+  user.paymentInfoReviewStatus = PAYMENT_INFO_REVIEW_STATUS.REJECTED;
+  user.paymentInfoReviewedBy = actor.id as never;
+  user.paymentInfoReviewedAt = new Date();
+  user.paymentInfoReviewComment = comment ?? null;
+  await user.save();
+  await user.populate(POPULATE_FIELDS);
+
+  await recordActivity({
+    actor,
+    action: ACTIVITY_ACTIONS.PAYMENT_INFO_REJECTED,
+    targetType: "User",
+    targetId: toId(user),
+    metadata: { comment },
+  });
+
+  await notifyUser({
+    user: toId(user),
+    type: NOTIFICATION_TYPES.PAYMENT_INFO_REJECTED,
+    title: "Bank details change rejected",
+    message: comment
+      ? `Your bank details change was rejected: ${comment}`
+      : "Your bank details change was rejected.",
+    metadata: {},
+  });
+
   return toPublicEmployee(user);
 }

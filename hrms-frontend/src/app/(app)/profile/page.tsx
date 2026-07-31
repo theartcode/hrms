@@ -59,7 +59,7 @@ export default function ProfilePage() {
       <EmployeeProfileView employee={data} attendanceHref={ROUTES.ATTENDANCE} />
 
       <Sheet open={editOpen} onOpenChange={setEditOpen}>
-        <SheetContent className="overflow-y-auto p-6">
+        <SheetContent className="w-full overflow-y-auto p-6 data-[side=right]:sm:max-w-lg">
           <SheetHeader className="p-0">
             <SheetTitle>Edit Profile</SheetTitle>
           </SheetHeader>

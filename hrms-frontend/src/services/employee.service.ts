@@ -1,6 +1,12 @@
 import { apiFetch } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/constants/api-endpoints";
-import { AssignableEmployee, Employee, EmployeeListResult } from "@/types/employee.types";
+import {
+  AssignableEmployee,
+  Employee,
+  EmployeeListResult,
+  PaymentInfo,
+  StatutoryInfo,
+} from "@/types/employee.types";
 
 type ApiSuccess<T> = { success: true; message: string; data: T };
 
@@ -74,6 +80,8 @@ export interface UpdateEmployeeInput {
   phone?: string;
   department?: string;
   designation?: string;
+  joiningDate?: string;
+  probationEndDate?: string | null;
   dateOfBirth?: string;
   gracePeriodOverrideMinutes?: number | null;
   role?: string;
@@ -81,6 +89,17 @@ export interface UpdateEmployeeInput {
   salary?: number | null;
   bloodGroup?: string | null;
   profilePhoto?: string | null;
+  manager?: string | null;
+  location?: string | null;
+  gender?: string | null;
+  whatsappEnabled?: boolean;
+  shiftStartTime?: string | null;
+  shiftEndTime?: string | null;
+  numberOfBonuses?: number | null;
+  advanceSalaryBalance?: number | null;
+  advanceSalaryEmi?: number | null;
+  paymentInfo?: PaymentInfo | null;
+  statutoryInfo?: StatutoryInfo | null;
 }
 
 export function updateEmployee(id: string, input: UpdateEmployeeInput) {
@@ -134,4 +153,25 @@ export function updateMyProfile(input: UpdateProfileInput) {
     method: "PATCH",
     body: JSON.stringify(input),
   });
+}
+
+export function submitPaymentInfoChange(input: PaymentInfo) {
+  return apiFetch<ApiSuccess<{ employee: Employee }>>(
+    API_ENDPOINTS.EMPLOYEES.SUBMIT_PAYMENT_INFO,
+    { method: "PATCH", body: JSON.stringify(input) }
+  );
+}
+
+export function approvePaymentInfoChange(id: string) {
+  return apiFetch<ApiSuccess<{ employee: Employee }>>(
+    API_ENDPOINTS.EMPLOYEES.APPROVE_PAYMENT_INFO(id),
+    { method: "PATCH" }
+  );
+}
+
+export function rejectPaymentInfoChange(id: string, comment?: string) {
+  return apiFetch<ApiSuccess<{ employee: Employee }>>(
+    API_ENDPOINTS.EMPLOYEES.REJECT_PAYMENT_INFO(id),
+    { method: "PATCH", body: JSON.stringify({ comment }) }
+  );
 }

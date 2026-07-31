@@ -7,6 +7,8 @@ import {
   createEmployeeSchema,
   getEmployeeSchema,
   listEmployeesSchema,
+  reviewPaymentInfoSchema,
+  submitPaymentInfoSchema,
   updateEmployeeSchema,
   updateProfileSchema,
 } from "./employee.validation";
@@ -22,6 +24,11 @@ router.patch(
   "/me",
   validate(updateProfileSchema),
   employeeController.updateMe
+);
+router.patch(
+  "/me/payment-info",
+  validate(submitPaymentInfoSchema),
+  employeeController.submitPaymentInfo
 );
 
 router.get("/", manage, validate(listEmployeesSchema), employeeController.list);
@@ -65,6 +72,18 @@ router.patch(
   manage,
   validate(getEmployeeSchema),
   employeeController.promoteToPermanent
+);
+router.patch(
+  "/:id/payment-info/approve",
+  manage,
+  validate(reviewPaymentInfoSchema),
+  employeeController.approvePaymentInfo
+);
+router.patch(
+  "/:id/payment-info/reject",
+  manage,
+  validate(reviewPaymentInfoSchema),
+  employeeController.rejectPaymentInfo
 );
 router.delete(
   "/:id",

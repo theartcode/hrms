@@ -36,6 +36,7 @@ export const updateOfficeSettingsSchema = z.object({
     latitude: z.coerce.number().min(-90).max(90).nullable().optional(),
     longitude: z.coerce.number().min(-180).max(180).nullable().optional(),
     allowedRadiusMeters: z.coerce.number().min(10).max(10000).optional(),
+    defaultProbationMonths: z.coerce.number().int().min(0).max(24).optional(),
   }),
 });
 

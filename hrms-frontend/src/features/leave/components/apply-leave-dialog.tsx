@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Loader2, Plus } from "lucide-react";
 import {
@@ -52,6 +52,24 @@ export function ApplyLeaveDialog() {
   const [open, setOpen] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  // Shares its cache with LeaveBalanceCard's self-view query (same key,
+  // both omit employeeId) — just reused here to know whether Annual/Comp
+  // Off should even be offered, rather than letting someone pick an option
+  // that can only fail with a "0 days available" rejection at submit time.
+  const { data: balance } = useQuery({
+    queryKey: ["leave-balance", undefined],
+    queryFn: () => leaveService.getBalance({}).then((res) => res.data),
+  });
+  const leaveTypeOptions = useMemo(
+    () =>
+      Object.values(LEAVE_TYPES).filter((t) => {
+        if (t === LEAVE_TYPES.ANNUAL) return balance?.employmentType === "PERMANENT";
+        if (t === LEAVE_TYPES.COMP_OFF) return balance?.compOff?.hasAnyGrant ?? false;
+        return true;
+      }),
+    [balance?.employmentType, balance?.compOff?.hasAnyGrant]
+  );
 
   const {
     register,
@@ -131,7 +149,7 @@ export function ApplyLeaveDialog() {
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.values(LEAVE_TYPES).map((t) => (
+                    {leaveTypeOptions.map((t) => (
                       <SelectItem key={t} value={t}>
                         {LEAVE_TYPE_LABELS[t]}
                       </SelectItem>

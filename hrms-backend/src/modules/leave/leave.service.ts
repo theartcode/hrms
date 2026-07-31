@@ -21,6 +21,19 @@ import { UserModel } from "../user/user.model";
 import { ILeaveBalance, LeaveBalanceModel } from "./leave-balance.model";
 import { ILeaveRequest, LeaveRequestModel } from "./leave-request.model";
 import { LeaveAllocationModel, ALLOCATION_PERIOD, AllocationPeriod } from "./leave-allocation.model";
+import {
+  ILeaveImportRecord,
+  LeaveImportRecordModel,
+  LEAVE_IMPORT_STATUS,
+  LeaveImportSource,
+  LeaveImportStatus,
+} from "./leave-import-record.model";
+import {
+  LeaveBalanceAdjustmentModel,
+  AdjustableBalanceField,
+  LEAVE_BALANCE_ADJUSTMENT_SOURCE,
+  LeaveBalanceAdjustmentSource,
+} from "./leave-balance-adjustment.model";
 import { computeLeaveWorkingDays, countEligibleAccrualMonths } from "./leave.util";
 
 interface Actor {
@@ -95,10 +108,38 @@ export async function getApprovedLeaveDateSet(
   return dates;
 }
 
+// Whether Jan-Jun of `year` has actually finished as of today (IST) — used
+// to gate carry-forward below. A year fully in the past always counts as
+// over; a year not yet reached never does.
+function isFirstHalfOver(year: number): boolean {
+  const today = getISTDateString();
+  const todayYear = Number(today.slice(0, 4));
+  const todayMonth = Number(today.slice(5, 7));
+  if (year < todayYear) return true;
+  if (year > todayYear) return false;
+  return todayMonth >= 7;
+}
+
+// Company policy treats each half as all-or-nothing, never prorated by
+// exact join date within it (joining March still gets the full Jan-Jun
+// quota) — so eligibility is just "did employment start on or before this
+// half's last day."
+function isEligibleForHalf(joiningDateStr: string, year: number, half: "H1" | "H2"): boolean {
+  return joiningDateStr <= (half === "H1" ? `${year}-06-30` : `${year}-12-31`);
+}
+
 // Shared by Sick and Casual Paid Leave — both are split into two half-year
 // buckets, with H2's quota including whatever H1 left unused (when
-// carry-forward is on). H1 is always fully closed out by the time H2
-// starts, so this is never computed against an in-progress half.
+// carry-forward is on). Two things gate carry-forward, not just one:
+//   1. H1 must have actually ended (`firstHalfOver`) — showing an inflated
+//      H2 total months in advance would assume zero further H1 usage is
+//      coming, misleading for anyone still mid-H1.
+//   2. The employee must have actually been eligible for H1 at all
+//      (`firstHalfEligible`) — someone who joined in Jul-Dec never had a
+//      Jan-Jun entitlement, so there is nothing of theirs to carry forward,
+//      no matter how far past June 30 today is.
+// H1's own total is zero outright when the employee wasn't eligible for it
+// (joined after June 30) — "Not Applicable," not a quota they can use.
 function computeHalfYearBuckets(
   quotaPerHalf: number,
   extraH1: number,
@@ -107,18 +148,36 @@ function computeHalfYearBuckets(
   usedH2: number,
   pendingH1: number,
   pendingH2: number,
-  carryForwardEnabled: boolean
+  carryForwardEnabled: boolean,
+  firstHalfOver: boolean,
+  firstHalfEligible: boolean,
+  secondHalfEligible: boolean
 ) {
-  const h1Total = quotaPerHalf;
+  const h1Total = firstHalfEligible ? quotaPerHalf + extraH1 : 0;
   const h1Remaining = Math.max(0, h1Total - usedH1 - pendingH1);
 
-  const carryOver = carryForwardEnabled ? Math.max(0, h1Total - usedH1) : 0;
-  const h2Total = quotaPerHalf + carryOver;
+  const carryOver =
+    carryForwardEnabled && firstHalfOver && firstHalfEligible ? Math.max(0, h1Total - usedH1) : 0;
+  const h2Total = secondHalfEligible ? quotaPerHalf + extraH2 + carryOver : 0;
   const h2Remaining = Math.max(0, h2Total - usedH2 - pendingH2);
 
   return {
-    half1: { used: usedH1, pending: pendingH1, total: h1Total, remaining: h1Remaining },
-    half2: { used: usedH2, pending: pendingH2, total: h2Total, remaining: h2Remaining },
+    half1: {
+      used: usedH1,
+      pending: pendingH1,
+      total: h1Total,
+      baseTotal: firstHalfEligible ? quotaPerHalf : 0,
+      extra: extraH1,
+      remaining: h1Remaining,
+    },
+    half2: {
+      used: usedH2,
+      pending: pendingH2,
+      total: h2Total,
+      baseTotal: secondHalfEligible ? quotaPerHalf + carryOver : 0,
+      extra: extraH2,
+      remaining: h2Remaining,
+    },
   };
 }
 
@@ -146,8 +205,80 @@ function creditAnnualAccrual(
   balance.annualAccruedThroughMonth = eligibleMonths;
 }
 
+const COMP_OFF_EXPIRY_MONTHS = 1;
+
+function addMonths(date: Date, months: number): Date {
+  const result = new Date(date);
+  result.setMonth(result.getMonth() + months);
+  return result;
+}
+
+// Comp Off is grant-only (no recurring policy quota) and each grant expires
+// COMP_OFF_EXPIRY_MONTHS after the date it was granted — unlike every other
+// leave type here, it can't be modeled as a flat running counter once
+// expiry matters, since "how much is left" depends on which specific grant
+// a day came from. Consumption is FIFO (oldest grant first, same as real
+// expiring-leave conventions): every LeaveAllocationModel COMP_OFF grant
+// and every approved COMP_OFF LeaveRequestModel day are walked oldest-first
+// together; whatever's left unconsumed in an already-expired grant is
+// simply dropped — forfeited, per "once expired the employee can't use
+// them." `hasAnyGrant` is for the frontend only, to hide the whole Comp Off
+// row for employees who've never once been granted any.
+async function computeCompOffBalance(
+  employeeId: string
+): Promise<{ granted: number; used: number; pending: number; remaining: number; hasAnyGrant: boolean }> {
+  const today = getISTDateString();
+
+  const [grants, usedRequests, pendingRequests] = await Promise.all([
+    LeaveAllocationModel.find({ employee: employeeId, leaveType: LEAVE_TYPES.COMP_OFF }).sort({
+      createdAt: 1,
+    }),
+    LeaveRequestModel.find({
+      employee: employeeId,
+      leaveType: LEAVE_TYPES.COMP_OFF,
+      status: LEAVE_REQUEST_STATUS.APPROVED,
+    }),
+    LeaveRequestModel.find({
+      employee: employeeId,
+      leaveType: LEAVE_TYPES.COMP_OFF,
+      status: LEAVE_REQUEST_STATUS.PENDING,
+    }),
+  ]);
+
+  const totalUsed = usedRequests.reduce((sum, r) => sum + r.days, 0);
+  const totalPending = pendingRequests.reduce((sum, r) => sum + r.days, 0);
+
+  let toConsume = totalUsed;
+  let validGranted = 0;
+  let usedFromValidGrants = 0;
+
+  for (const grant of grants) {
+    const consumedFromThisGrant = Math.min(grant.days, toConsume);
+    toConsume -= consumedFromThisGrant;
+
+    const expiryDateStr = getISTDateString(addMonths(grant.createdAt, COMP_OFF_EXPIRY_MONTHS));
+    const expired = expiryDateStr <= today;
+    if (!expired) {
+      validGranted += grant.days;
+      usedFromValidGrants += consumedFromThisGrant;
+    }
+    // Expired grants are excluded entirely — their unused remainder is
+    // forfeited, not carried anywhere.
+  }
+
+  return {
+    granted: Math.round(validGranted * 100) / 100,
+    used: Math.round(usedFromValidGrants * 100) / 100,
+    pending: totalPending,
+    remaining: Math.max(0, Math.round((validGranted - usedFromValidGrants - totalPending) * 100) / 100),
+    hasAnyGrant: grants.length > 0,
+  };
+}
+
 export async function getLeaveBalance(employeeId: string, year: number) {
-  const employee = await UserModel.findById(employeeId).select("employmentType permanentSince");
+  const employee = await UserModel.findById(employeeId).select(
+    "employmentType permanentSince joiningDate"
+  );
   if (!employee) throw new ApiError(404, "Employee not found");
 
   let balance = await LeaveBalanceModel.findOne({ employee: employeeId, year });
@@ -175,7 +306,7 @@ export async function getLeaveBalance(employeeId: string, year: number) {
 
   let pendingSickH1 = 0, pendingSickH2 = 0;
   let pendingCasualH1 = 0, pendingCasualH2 = 0;
-  let pendingAnnual = 0, pendingUnpaid = 0, pendingCompOff = 0;
+  let pendingAnnual = 0, pendingUnpaid = 0;
 
   for (const req of pendingRequests) {
     const half = leaveHalf(req.startDate);
@@ -189,15 +320,25 @@ export async function getLeaveBalance(employeeId: string, year: number) {
       pendingAnnual += req.days;
     } else if (req.leaveType === LEAVE_TYPES.UNPAID) {
       pendingUnpaid += req.days;
-    } else if (req.leaveType === LEAVE_TYPES.COMP_OFF) {
-      pendingCompOff += req.days;
     }
+    // COMP_OFF pending is computed separately by computeCompOffBalance,
+    // which isn't scoped to `year` — Comp Off doesn't reset yearly.
   }
 
+  const compOff = await computeCompOffBalance(employeeId);
   const annualAccruedTotal = Math.round(balance.annualAccrued * 100) / 100;
+  const annualExtra = balance.annualExtra || 0;
+  const firstHalfOver = isFirstHalfOver(year);
+  const joiningDateStr = getISTDateString(employee.joiningDate);
+  const firstHalfEligible = isEligibleForHalf(joiningDateStr, year, "H1");
+  const secondHalfEligible = isEligibleForHalf(joiningDateStr, year, "H2");
 
   return {
     year,
+    // Lets the frontend hide/disable Annual Leave for Probation employees
+    // instead of only rejecting it at submit time — see apply-leave-dialog.tsx
+    // and leave-balance-card.tsx.
+    employmentType: employee.employmentType,
     sick: computeHalfYearBuckets(
       policy.sickQuotaPerHalf,
       balance.sickExtraH1 || 0,
@@ -206,7 +347,10 @@ export async function getLeaveBalance(employeeId: string, year: number) {
       balance.sickUsedH2,
       pendingSickH1,
       pendingSickH2,
-      policy.carryForwardEnabled
+      policy.carryForwardEnabled,
+      firstHalfOver,
+      firstHalfEligible,
+      secondHalfEligible
     ),
     casualPaid: computeHalfYearBuckets(
       policy.casualPaidQuotaPerHalf,
@@ -216,21 +360,24 @@ export async function getLeaveBalance(employeeId: string, year: number) {
       balance.casualPaidUsedH2,
       pendingCasualH1,
       pendingCasualH2,
-      policy.carryForwardEnabled
+      policy.carryForwardEnabled,
+      firstHalfOver,
+      firstHalfEligible,
+      secondHalfEligible
     ),
     annual: {
       used: balance.annualUsed,
       pending: pendingAnnual,
-      accrued: annualAccruedTotal,
-      remaining: Math.max(0, Math.round((annualAccruedTotal - balance.annualUsed - pendingAnnual) * 100) / 100),
+      accrued: Math.round((annualAccruedTotal + annualExtra) * 100) / 100,
+      baseAccrued: annualAccruedTotal,
+      extra: annualExtra,
+      remaining: Math.max(
+        0,
+        Math.round((annualAccruedTotal + annualExtra - balance.annualUsed - pendingAnnual) * 100) / 100
+      ),
     },
     unpaid: { used: balance.unpaidUsed, pending: pendingUnpaid, total: null, remaining: null },
-    compOff: {
-      granted: balance.compOffGranted || 0,
-      used: balance.compOffUsed || 0,
-      pending: pendingCompOff,
-      remaining: Math.max(0, (balance.compOffGranted || 0) - (balance.compOffUsed || 0) - pendingCompOff),
-    },
+    compOff,
   };
 }
 
@@ -675,6 +822,81 @@ export async function rejectLeave(actor: Actor, leaveId: string, comment?: strin
   return toPublicLeave(leave);
 }
 
+// Gates the manual allocation trio below — never applyLeave/approveLeave/
+// rejectLeave/cancelLeave, which are core day-to-day operations that must
+// keep working for every employee regardless of migration status.
+function assertLeaveMigrationConfirmed(employee: { leaveMigrationStatus: string }): void {
+  if (employee.leaveMigrationStatus !== "CONFIRMED") {
+    throw new ApiError(
+      409,
+      "Complete Leave Analysis & Migration confirmation before adjusting this employee's balance"
+    );
+  }
+}
+
+// The four leave types a manual grant/edit/delete can actually affect, and
+// which "extra"/"granted" field each (type, period) pair maps to. Mirrors
+// the branching already in grantExtraLeave/updateLeaveAllocation/
+// deleteLeaveAllocation exactly — returns null for anything else (e.g.
+// UNPAID, which those functions already silently no-op for) so callers
+// know not to write a misleading audit row.
+function resolveExtraField(
+  leaveType: LeaveType,
+  period: AllocationPeriod
+): AdjustableBalanceField | null {
+  if (leaveType === LEAVE_TYPES.COMP_OFF) return "compOffGranted";
+  if (leaveType === LEAVE_TYPES.SICK) {
+    return period === ALLOCATION_PERIOD.H1 ? "sickExtraH1" : "sickExtraH2";
+  }
+  if (leaveType === LEAVE_TYPES.CASUAL_PAID) {
+    return period === ALLOCATION_PERIOD.H1 ? "casualPaidExtraH1" : "casualPaidExtraH2";
+  }
+  if (leaveType === LEAVE_TYPES.ANNUAL) return "annualExtra";
+  return null;
+}
+
+async function recordBalanceAdjustment(params: {
+  actor: Actor;
+  employeeId: string;
+  year: number;
+  leaveType: LeaveType;
+  period: AllocationPeriod | null;
+  field: AdjustableBalanceField;
+  previousValue: number;
+  newValue: number;
+  reason: string;
+  source: LeaveBalanceAdjustmentSource;
+  relatedAllocationId?: string | null;
+}): Promise<void> {
+  const adjustment = await LeaveBalanceAdjustmentModel.create({
+    employee: params.employeeId,
+    year: params.year,
+    leaveType: params.leaveType,
+    period: params.period,
+    field: params.field,
+    previousValue: params.previousValue,
+    newValue: params.newValue,
+    reason: params.reason,
+    source: params.source,
+    relatedAllocationId: params.relatedAllocationId ?? null,
+    performedBy: params.actor.id,
+  });
+
+  await recordActivity({
+    actor: params.actor,
+    action: ACTIVITY_ACTIONS.LEAVE_BALANCE_ADJUSTED,
+    targetType: "LeaveBalanceAdjustment",
+    targetId: toId(adjustment),
+    metadata: {
+      employeeId: params.employeeId,
+      field: params.field,
+      previousValue: params.previousValue,
+      newValue: params.newValue,
+      source: params.source,
+    },
+  });
+}
+
 export interface GrantExtraLeaveInput {
   employeeId: string;
   days: number;
@@ -687,6 +909,7 @@ export interface GrantExtraLeaveInput {
 export async function grantExtraLeave(actor: Actor, input: GrantExtraLeaveInput) {
   const employee = await UserModel.findById(input.employeeId);
   if (!employee) throw new ApiError(404, "Employee not found");
+  assertLeaveMigrationConfirmed(employee);
 
   const year = input.year ?? new Date().getFullYear();
 
@@ -697,6 +920,8 @@ export async function grantExtraLeave(actor: Actor, input: GrantExtraLeaveInput)
 
   const leaveType = input.leaveType ?? LEAVE_TYPES.COMP_OFF;
   const period = input.period ?? ALLOCATION_PERIOD.ANNUAL;
+  const field = resolveExtraField(leaveType, period);
+  const previousValue = field ? balance[field] || 0 : 0;
 
   if (leaveType === LEAVE_TYPES.COMP_OFF) {
     balance.compOffGranted = (balance.compOffGranted || 0) + input.days;
@@ -721,6 +946,22 @@ export async function grantExtraLeave(actor: Actor, input: GrantExtraLeaveInput)
     reason: input.reason,
     grantedBy: actor.id,
   });
+
+  if (field) {
+    await recordBalanceAdjustment({
+      actor,
+      employeeId: input.employeeId,
+      year,
+      leaveType,
+      period,
+      field,
+      previousValue,
+      newValue: balance[field] || 0,
+      reason: input.reason,
+      source: LEAVE_BALANCE_ADJUSTMENT_SOURCE.MANUAL_GRANT,
+      relatedAllocationId: toId(allocation),
+    });
+  }
 
   await recordActivity({
     actor,
@@ -778,6 +1019,10 @@ export async function updateLeaveAllocation(
   const allocation = await LeaveAllocationModel.findById(id);
   if (!allocation) throw new ApiError(404, "Leave allocation not found");
 
+  const employee = await UserModel.findById(allocation.employee);
+  if (!employee) throw new ApiError(404, "Employee not found");
+  assertLeaveMigrationConfirmed(employee);
+
   if (input.days !== undefined && input.days !== allocation.days) {
     const diff = input.days - allocation.days;
     const balance = await LeaveBalanceModel.findOne({
@@ -785,6 +1030,9 @@ export async function updateLeaveAllocation(
       year: allocation.year,
     });
     if (balance) {
+      const field = resolveExtraField(allocation.leaveType, allocation.period);
+      const previousValue = field ? balance[field] || 0 : 0;
+
       if (allocation.leaveType === LEAVE_TYPES.COMP_OFF) {
         balance.compOffGranted = Math.max(0, (balance.compOffGranted || 0) + diff);
       } else if (allocation.leaveType === LEAVE_TYPES.SICK) {
@@ -797,6 +1045,22 @@ export async function updateLeaveAllocation(
         balance.annualExtra = Math.max(0, balance.annualExtra + diff);
       }
       await balance.save();
+
+      if (field) {
+        await recordBalanceAdjustment({
+          actor,
+          employeeId: String(allocation.employee),
+          year: allocation.year,
+          leaveType: allocation.leaveType,
+          period: allocation.period,
+          field,
+          previousValue,
+          newValue: balance[field] || 0,
+          reason: input.reason ?? allocation.reason,
+          source: LEAVE_BALANCE_ADJUSTMENT_SOURCE.MANUAL_EDIT,
+          relatedAllocationId: id,
+        });
+      }
     }
     allocation.days = input.days;
   }
@@ -813,12 +1077,19 @@ export async function deleteLeaveAllocation(actor: Actor, id: string) {
   const allocation = await LeaveAllocationModel.findById(id);
   if (!allocation) throw new ApiError(404, "Leave allocation not found");
 
+  const employee = await UserModel.findById(allocation.employee);
+  if (!employee) throw new ApiError(404, "Employee not found");
+  assertLeaveMigrationConfirmed(employee);
+
   const balance = await LeaveBalanceModel.findOne({
     employee: allocation.employee,
     year: allocation.year,
   });
 
   if (balance) {
+    const field = resolveExtraField(allocation.leaveType, allocation.period);
+    const previousValue = field ? balance[field] || 0 : 0;
+
     if (allocation.leaveType === LEAVE_TYPES.COMP_OFF) {
       balance.compOffGranted = Math.max(0, (balance.compOffGranted || 0) - allocation.days);
     } else if (allocation.leaveType === LEAVE_TYPES.SICK) {
@@ -831,10 +1102,341 @@ export async function deleteLeaveAllocation(actor: Actor, id: string) {
       balance.annualExtra = Math.max(0, balance.annualExtra - allocation.days);
     }
     await balance.save();
+
+    if (field) {
+      await recordBalanceAdjustment({
+        actor,
+        employeeId: String(allocation.employee),
+        year: allocation.year,
+        leaveType: allocation.leaveType,
+        period: allocation.period,
+        field,
+        previousValue,
+        newValue: balance[field] || 0,
+        reason: `Deleted allocation: ${allocation.reason}`,
+        source: LEAVE_BALANCE_ADJUSTMENT_SOURCE.MANUAL_DELETE,
+        relatedAllocationId: id,
+      });
+    }
   }
 
   await allocation.deleteOne();
   return { id };
+}
+
+const ADJUSTABLE_FIELD_META: Record<
+  AdjustableBalanceField,
+  { leaveType: LeaveType; period: AllocationPeriod | null }
+> = {
+  sickUsedH1: { leaveType: LEAVE_TYPES.SICK, period: ALLOCATION_PERIOD.H1 },
+  sickUsedH2: { leaveType: LEAVE_TYPES.SICK, period: ALLOCATION_PERIOD.H2 },
+  sickExtraH1: { leaveType: LEAVE_TYPES.SICK, period: ALLOCATION_PERIOD.H1 },
+  sickExtraH2: { leaveType: LEAVE_TYPES.SICK, period: ALLOCATION_PERIOD.H2 },
+  casualPaidUsedH1: { leaveType: LEAVE_TYPES.CASUAL_PAID, period: ALLOCATION_PERIOD.H1 },
+  casualPaidUsedH2: { leaveType: LEAVE_TYPES.CASUAL_PAID, period: ALLOCATION_PERIOD.H2 },
+  casualPaidExtraH1: { leaveType: LEAVE_TYPES.CASUAL_PAID, period: ALLOCATION_PERIOD.H1 },
+  casualPaidExtraH2: { leaveType: LEAVE_TYPES.CASUAL_PAID, period: ALLOCATION_PERIOD.H2 },
+  annualAccrued: { leaveType: LEAVE_TYPES.ANNUAL, period: null },
+  annualExtra: { leaveType: LEAVE_TYPES.ANNUAL, period: null },
+  annualUsed: { leaveType: LEAVE_TYPES.ANNUAL, period: null },
+  unpaidUsed: { leaveType: LEAVE_TYPES.UNPAID, period: null },
+  compOffGranted: { leaveType: LEAVE_TYPES.COMP_OFF, period: null },
+  compOffUsed: { leaveType: LEAVE_TYPES.COMP_OFF, period: null },
+};
+
+export interface ImportLeaveRow {
+  leaveType: LeaveType;
+  startDate: string;
+  endDate: string;
+  days: number;
+  status: LeaveImportStatus;
+  reason?: string;
+  externalReference?: string;
+}
+
+// Whole-batch validation already happened at the route layer (the Zod
+// array schema rejects the entire request if any row is invalid) — by the
+// time this runs, every row is known-good, so this is a plain bulk insert,
+// never partial.
+export async function importHistoricalLeave(
+  actor: Actor,
+  employeeId: string,
+  input: { source: LeaveImportSource; sourceFilename?: string; rows: ImportLeaveRow[] }
+) {
+  const employee = await UserModel.findById(employeeId);
+  if (!employee) throw new ApiError(404, "Employee not found");
+  if (employee.leaveMigrationStatus === "CONFIRMED") {
+    throw new ApiError(
+      409,
+      "This employee's leave migration is already confirmed — reopen it before importing more history"
+    );
+  }
+
+  const importBatchId = new mongoose.Types.ObjectId().toString();
+
+  const docs = input.rows.map((row) => ({
+    employee: employeeId,
+    source: input.source,
+    leaveType: row.leaveType,
+    startDate: row.startDate,
+    endDate: row.endDate,
+    days: row.days,
+    status: row.status,
+    reason: row.reason ?? null,
+    externalReference: row.externalReference ?? null,
+    sourceFilename: input.sourceFilename ?? null,
+    importBatchId,
+    importedBy: actor.id,
+  }));
+
+  const created = await LeaveImportRecordModel.insertMany(docs);
+
+  await recordActivity({
+    actor,
+    action: ACTIVITY_ACTIONS.LEAVE_HISTORY_IMPORTED,
+    targetType: "LeaveImportRecord",
+    targetId: importBatchId,
+    metadata: { employeeId, importBatchId, rowCount: created.length, source: input.source },
+  });
+
+  return { importBatchId, importedCount: created.length };
+}
+
+export async function deleteImportBatch(actor: Actor, employeeId: string, batchId: string) {
+  const employee = await UserModel.findById(employeeId);
+  if (!employee) throw new ApiError(404, "Employee not found");
+  if (employee.leaveMigrationStatus === "CONFIRMED") {
+    throw new ApiError(
+      409,
+      "This employee's leave migration is already confirmed — historical records are locked"
+    );
+  }
+
+  const result = await LeaveImportRecordModel.deleteMany({
+    employee: employeeId,
+    importBatchId: batchId,
+  });
+  if (result.deletedCount === 0) {
+    throw new ApiError(404, "Import batch not found");
+  }
+
+  await recordActivity({
+    actor,
+    action: ACTIVITY_ACTIONS.LEAVE_IMPORT_BATCH_DELETED,
+    targetType: "LeaveImportRecord",
+    targetId: batchId,
+    metadata: { employeeId, importBatchId: batchId, deletedCount: result.deletedCount },
+  });
+
+  return { deletedCount: result.deletedCount };
+}
+
+function toPublicImportRecord(record: ILeaveImportRecord) {
+  return {
+    id: toId(record),
+    source: record.source,
+    leaveType: record.leaveType,
+    startDate: record.startDate,
+    endDate: record.endDate,
+    days: record.days,
+    status: record.status,
+    reason: record.reason,
+    externalReference: record.externalReference,
+    importBatchId: record.importBatchId,
+    createdAt: record.createdAt,
+  };
+}
+
+export async function getLeaveMigrationAnalysis(employeeId: string) {
+  const employee = await UserModel.findById(employeeId)
+    .select(
+      "fullName employeeId leaveMigrationStatus leaveMigrationConfirmedBy leaveMigrationConfirmedAt leaveMigrationConfirmedReason"
+    )
+    .populate("leaveMigrationConfirmedBy", "fullName");
+  if (!employee) throw new ApiError(404, "Employee not found");
+
+  const year = new Date().getFullYear();
+  const [balanceSummary, pendingRequests, nativeHistory, importedHistory] = await Promise.all([
+    getLeaveBalance(employeeId, year),
+    LeaveRequestModel.find({ employee: employeeId, status: LEAVE_REQUEST_STATUS.PENDING }).sort({
+      startDate: -1,
+    }),
+    LeaveRequestModel.find({ employee: employeeId }).sort({ startDate: -1 }),
+    LeaveImportRecordModel.find({ employee: employeeId }).sort({ startDate: -1 }),
+  ]);
+
+  const history = [
+    ...nativeHistory.map((r) => ({ ...toPublicLeave(r), source: "NATIVE" as const })),
+    ...importedHistory.map((r) => ({ ...toPublicImportRecord(r), source: r.source })),
+  ].sort((a, b) => (a.startDate < b.startDate ? 1 : -1));
+
+  const importBatchMap = new Map<
+    string,
+    { batchId: string; source: LeaveImportSource; sourceFilename: string | null; importedAt: Date; rowCount: number }
+  >();
+  for (const r of importedHistory) {
+    const existing = importBatchMap.get(r.importBatchId);
+    if (existing) {
+      existing.rowCount += 1;
+    } else {
+      importBatchMap.set(r.importBatchId, {
+        batchId: r.importBatchId,
+        source: r.source,
+        sourceFilename: r.sourceFilename,
+        importedAt: r.createdAt,
+        rowCount: 1,
+      });
+    }
+  }
+
+  // Proposed balance: sum APPROVED imported rows dated in the current year
+  // into the matching "used" bucket. Prior-year imports still show up in
+  // history above but don't auto-feed this year's math — carry-forward is
+  // policy-dependent, so the admin adds it manually if needed instead of
+  // the system silently guessing.
+  const currentBalance = await LeaveBalanceModel.findOne({ employee: employeeId, year });
+  const currentOf = (field: AdjustableBalanceField) => (currentBalance ? currentBalance[field] || 0 : 0);
+
+  const proposalTotals = new Map<AdjustableBalanceField, number>();
+  for (const r of importedHistory) {
+    if (r.status !== LEAVE_IMPORT_STATUS.APPROVED) continue;
+    if (r.startDate.slice(0, 4) !== String(year)) continue;
+
+    let field: AdjustableBalanceField | null = null;
+    if (r.leaveType === LEAVE_TYPES.SICK) field = leaveHalf(r.startDate) === "H1" ? "sickUsedH1" : "sickUsedH2";
+    else if (r.leaveType === LEAVE_TYPES.CASUAL_PAID) field = leaveHalf(r.startDate) === "H1" ? "casualPaidUsedH1" : "casualPaidUsedH2";
+    else if (r.leaveType === LEAVE_TYPES.ANNUAL) field = "annualUsed";
+    else if (r.leaveType === LEAVE_TYPES.COMP_OFF) field = "compOffUsed";
+    else if (r.leaveType === LEAVE_TYPES.UNPAID) field = "unpaidUsed";
+    if (!field) continue;
+
+    proposalTotals.set(field, (proposalTotals.get(field) ?? 0) + r.days);
+  }
+
+  const proposedAdjustments = Array.from(proposalTotals.entries()).map(([field, importedDays]) => ({
+    field,
+    leaveType: ADJUSTABLE_FIELD_META[field].leaveType,
+    period: ADJUSTABLE_FIELD_META[field].period,
+    currentValue: currentOf(field),
+    proposedValue: Math.round((currentOf(field) + importedDays) * 100) / 100,
+  }));
+
+  return {
+    employee: { id: toId(employee), fullName: employee.fullName, employeeId: employee.employeeId },
+    migrationStatus: employee.leaveMigrationStatus,
+    migrationConfirmedBy: employee.leaveMigrationConfirmedBy,
+    migrationConfirmedAt: employee.leaveMigrationConfirmedAt,
+    migrationConfirmedReason: employee.leaveMigrationConfirmedReason,
+    balance: balanceSummary,
+    pendingRequests: pendingRequests.map(toPublicLeave),
+    history,
+    importBatches: Array.from(importBatchMap.values()),
+    proposedAdjustments,
+  };
+}
+
+export interface ConfirmLeaveMigrationInput {
+  reason: string;
+  adjustments: { field: AdjustableBalanceField; newValue: number }[];
+}
+
+export async function confirmLeaveMigration(
+  actor: Actor,
+  employeeId: string,
+  input: ConfirmLeaveMigrationInput
+) {
+  const employee = await UserModel.findById(employeeId);
+  if (!employee) throw new ApiError(404, "Employee not found");
+  if (employee.leaveMigrationStatus === "CONFIRMED") {
+    throw new ApiError(409, "This employee's leave migration is already confirmed");
+  }
+
+  const year = new Date().getFullYear();
+  let balance = await LeaveBalanceModel.findOne({ employee: employeeId, year });
+  if (!balance) {
+    balance = new LeaveBalanceModel({ employee: employeeId, year });
+  }
+
+  for (const adj of input.adjustments) {
+    const previousValue = balance[adj.field] || 0;
+    if (previousValue === adj.newValue) continue;
+
+    balance[adj.field] = adj.newValue;
+
+    // Comp Off balance is otherwise computed purely from LeaveAllocationModel
+    // grants (see computeCompOffBalance) so each one can expire a month
+    // after it was granted — a migration-set opening balance needs its own
+    // ledger entry too, or it would be invisible to that calculation and
+    // never show up (or expire) at all. Dated now, so it gets a full fresh
+    // expiry window starting at confirmation, not backdated to whenever the
+    // historical days were actually earned under Razorpay.
+    if (adj.field === "compOffGranted" && adj.newValue > previousValue) {
+      await LeaveAllocationModel.create({
+        employee: employeeId,
+        leaveType: LEAVE_TYPES.COMP_OFF,
+        period: ALLOCATION_PERIOD.ANNUAL,
+        year,
+        days: adj.newValue - previousValue,
+        reason: `Migration opening balance: ${input.reason}`,
+        grantedBy: actor.id,
+      });
+    }
+
+    const meta = ADJUSTABLE_FIELD_META[adj.field];
+    await recordBalanceAdjustment({
+      actor,
+      employeeId,
+      year,
+      leaveType: meta.leaveType,
+      period: meta.period,
+      field: adj.field,
+      previousValue,
+      newValue: adj.newValue,
+      reason: input.reason,
+      source: LEAVE_BALANCE_ADJUSTMENT_SOURCE.MIGRATION_CONFIRM,
+    });
+  }
+  await balance.save();
+
+  employee.leaveMigrationStatus = "CONFIRMED";
+  employee.leaveMigrationConfirmedBy = actor.id as never;
+  employee.leaveMigrationConfirmedAt = new Date();
+  employee.leaveMigrationConfirmedReason = input.reason;
+  await employee.save();
+
+  await recordActivity({
+    actor,
+    action: ACTIVITY_ACTIONS.LEAVE_MIGRATION_CONFIRMED,
+    targetType: "User",
+    targetId: employeeId,
+    metadata: { reason: input.reason, adjustmentCount: input.adjustments.length },
+  });
+
+  return { employeeId, leaveMigrationStatus: employee.leaveMigrationStatus };
+}
+
+export async function reopenLeaveMigration(actor: Actor, employeeId: string) {
+  const employee = await UserModel.findById(employeeId);
+  if (!employee) throw new ApiError(404, "Employee not found");
+  if (employee.leaveMigrationStatus !== "CONFIRMED") {
+    throw new ApiError(409, "This employee's leave migration hasn't been confirmed yet");
+  }
+
+  employee.leaveMigrationStatus = "NOT_STARTED";
+  employee.leaveMigrationConfirmedBy = null;
+  employee.leaveMigrationConfirmedAt = null;
+  employee.leaveMigrationConfirmedReason = null;
+  await employee.save();
+
+  await recordActivity({
+    actor,
+    action: ACTIVITY_ACTIONS.LEAVE_MIGRATION_REOPENED,
+    targetType: "User",
+    targetId: employeeId,
+    metadata: {},
+  });
+
+  return { employeeId, leaveMigrationStatus: employee.leaveMigrationStatus };
 }
 
 export { resolveViewableEmployeeId };

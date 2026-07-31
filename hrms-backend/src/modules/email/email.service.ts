@@ -8,6 +8,7 @@ import { testEmail, TestEmailData } from "./templates/test-email";
 import { leaveAppliedEmail, LeaveAppliedEmailData } from "./templates/leave-applied";
 import { leaveApprovedEmail, LeaveApprovedEmailData } from "./templates/leave-approved";
 import { leaveRejectedEmail, LeaveRejectedEmailData } from "./templates/leave-rejected";
+import { probationEndingEmail, ProbationEndingEmailData } from "./templates/probation-ending";
 import { SendEmailCommand } from "@aws-sdk/client-ses";
 import { EMAIL_PROVIDER } from "../configuration/configuration.model";
 
@@ -23,6 +24,7 @@ const TEMPLATES = {
   "leave-applied": leaveAppliedEmail,
   "leave-approved": leaveApprovedEmail,
   "leave-rejected": leaveRejectedEmail,
+  "probation-ending": probationEndingEmail,
 } as const;
 
 export type EmailTemplateName = keyof typeof TEMPLATES;
@@ -35,6 +37,7 @@ type TemplateDataMap = {
   "leave-applied": LeaveAppliedEmailData;
   "leave-approved": LeaveApprovedEmailData;
   "leave-rejected": LeaveRejectedEmailData;
+  "probation-ending": ProbationEndingEmailData;
 };
 
 interface SendResult {

@@ -10,6 +10,12 @@ import {
   MapPin,
   Camera,
   Loader2,
+  Wallet,
+  Clock,
+  Landmark,
+  ShieldCheck,
+  Info,
+  FileText,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +31,12 @@ import * as attendanceService from "@/services/attendance.service";
 import * as employeeService from "@/services/employee.service";
 import { useAuth } from "@/hooks/use-auth";
 import { formatISTDate, formatISTTime, formatWorkedHours } from "@/lib/format-ist";
+import { maskAccountNumber } from "@/lib/utils";
 import { ExportButton } from "@/features/reports/components/export-button";
+import { DocumentsPanel } from "@/features/documents/components/documents-panel";
+import { LeaveBalanceCard } from "@/features/leave/components/leave-balance-card";
+import { LeaveMigrationPanel } from "@/features/leave/components/leave-migration-panel";
+import { ROLES } from "@/constants/roles";
 
 const ROLE_LABELS: Record<string, string> = {
   EMPLOYEE: "Employee",
@@ -47,6 +58,29 @@ function formatSalary(amount?: number | null): string {
   return `₹${amount.toLocaleString("en-IN")}`;
 }
 
+function formatShiftTime(start: string | null, end: string | null): string {
+  if (!start && !end) return "—";
+  return `${start ?? "—"} - ${end ?? "—"}`;
+}
+
+function isProbationOverdue(employee: Employee): boolean {
+  if (employee.employmentType !== "PROBATION" || !employee.probationEndDate) return false;
+  return new Date(employee.probationEndDate).getTime() < Date.now();
+}
+
+const GENDER_LABELS: Record<string, string> = {
+  MALE: "Male",
+  FEMALE: "Female",
+  OTHER: "Other",
+};
+
+function StatutoryBadge({ status }: { status?: string | null }) {
+  const enabled = status === "ENABLED";
+  return (
+    <Badge variant={enabled ? "default" : "outline"}>{enabled ? "Enabled" : "Disabled"}</Badge>
+  );
+}
+
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
@@ -64,7 +98,7 @@ export function EmployeeProfileView({
 }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"overview" | "attendance">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "attendance" | "documents">("overview");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -124,6 +158,30 @@ export function EmployeeProfileView({
         `attendance-${employee.employeeId}-${selectedYear}-${String(selectedMonth).padStart(2, "0")}.csv`
       ),
     onSuccess: () => toast.success("Attendance history exported"),
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const isAdmin = user?.role === ROLES.ADMIN || user?.role === ROLES.SUPER_ADMIN;
+
+  const approvePaymentInfoMutation = useMutation({
+    mutationFn: () => employeeService.approvePaymentInfoChange(employee.id),
+    onSuccess: () => {
+      toast.success("Bank details approved");
+      queryClient.invalidateQueries({ queryKey: ["my-profile"] });
+      queryClient.invalidateQueries({ queryKey: ["employee", employee.id] });
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const rejectPaymentInfoMutation = useMutation({
+    mutationFn: () => employeeService.rejectPaymentInfoChange(employee.id),
+    onSuccess: () => {
+      toast.success("Bank details change rejected");
+      queryClient.invalidateQueries({ queryKey: ["my-profile"] });
+      queryClient.invalidateQueries({ queryKey: ["employee", employee.id] });
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
+    },
     onError: (err: Error) => toast.error(err.message),
   });
 
@@ -199,6 +257,15 @@ export function EmployeeProfileView({
               <CalendarCheck className="h-3.5 w-3.5" />
               Attendance & History
             </Button>
+            <Button
+              variant={activeTab === "documents" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setActiveTab("documents")}
+              className="gap-2 text-xs font-medium"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              Documents
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -219,6 +286,7 @@ export function EmployeeProfileView({
               <Field label="Employee ID" value={employee.employeeId} />
               <Field label="Email Address" value={employee.email} />
               <Field label="Phone Number" value={employee.phone} />
+              <Field label="Gender" value={employee.gender ? GENDER_LABELS[employee.gender] : "—"} />
               <Field label="Blood Group" value={employee.bloodGroup} />
               <Field
                 label="Date of Birth"
@@ -239,11 +307,12 @@ export function EmployeeProfileView({
             <CardContent className="grid gap-4 sm:grid-cols-2 pt-4">
               <Field label="Department" value={employee.department?.name} />
               <Field label="Designation" value={employee.designation?.name} />
+              <Field label="Manager" value={employee.manager?.fullName} />
+              <Field label="Location" value={employee.location?.name} />
               <Field
                 label="Joining Date"
                 value={employee.joiningDate ? formatISTDate(employee.joiningDate) : "—"}
               />
-              <Field label="Salary" value={formatSalary(employee.salary)} />
               <Field
                 label="Employment Type"
                 value={
@@ -254,10 +323,183 @@ export function EmployeeProfileView({
                     : "Probation"
                 }
               />
+              {employee.employmentType === "PROBATION" && employee.probationEndDate && (
+                <Field
+                  label="Probation Ends On"
+                  value={
+                    <span className="flex items-center gap-2">
+                      {formatISTDate(employee.probationEndDate)}
+                      {isProbationOverdue(employee) && (
+                        <Badge
+                          variant="outline"
+                          className="bg-red-500/10 text-red-600 dark:text-red-400 border-transparent"
+                        >
+                          Overdue
+                        </Badge>
+                      )}
+                    </span>
+                  }
+                />
+              )}
               <Field label="Grace Override" value={employee.gracePeriodOverrideMinutes ? `${employee.gracePeriodOverrideMinutes} mins` : "Company Default"} />
             </CardContent>
           </Card>
+
+          {/* Compensation & Perquisites */}
+          <Card>
+            <CardHeader className="border-b pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Wallet className="h-4 w-4 text-primary" />
+                Compensation & Perquisites
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2 pt-4">
+              <Field label="Annual Salary" value={formatSalary(employee.salary)} />
+              <Field label="Number of Bonuses" value={employee.numberOfBonuses ?? 0} />
+              <Field label="Current Advance Salary" value={formatSalary(employee.advanceSalaryBalance)} />
+              <Field label="Advance Salary EMI" value={formatSalary(employee.advanceSalaryEmi)} />
+            </CardContent>
+          </Card>
+
+          {/* Shift Timing */}
+          <Card>
+            <CardHeader className="border-b pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Clock className="h-4 w-4 text-primary" />
+                Shift Timing
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2 pt-4">
+              <Field
+                label="Shift Timing"
+                value={formatShiftTime(employee.shiftStartTime, employee.shiftEndTime)}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Leave Balance — read-only here for everyone; admins get the
+              editable allocations panel further below instead of inline
+              edit controls on this card, since granting/adjusting leave
+              involves picking a leave type + half-year, not a single field. */}
+          <LeaveBalanceCard employeeId={employee.id} />
+
+          {/* Payment Information */}
+          <Card>
+            <CardHeader className="border-b pb-3">
+              <CardTitle className="text-base font-semibold flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2">
+                  <Landmark className="h-4 w-4 text-primary" />
+                  Payment Information
+                </span>
+                {employee.paymentInfoReviewStatus === "PENDING" && (
+                  <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-transparent">
+                    Bank Change Pending
+                  </Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4 pt-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="IFSC Code" value={employee.paymentInfo?.ifscCode} />
+                <Field
+                  label="Account Number"
+                  value={
+                    employee.paymentInfo?.accountNumber
+                      ? maskAccountNumber(employee.paymentInfo.accountNumber)
+                      : null
+                  }
+                />
+                <Field label="Account Holder Name" value={employee.paymentInfo?.accountHolderName} />
+              </div>
+
+              {isAdmin && employee.paymentInfoReviewStatus === "PENDING" && employee.pendingPaymentInfo && (
+                <div className="flex flex-col gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                  <p className="text-sm font-medium">Submitted bank details awaiting approval</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label="IFSC Code" value={employee.pendingPaymentInfo.ifscCode} />
+                    <Field
+                      label="Account Number"
+                      value={maskAccountNumber(employee.pendingPaymentInfo.accountNumber)}
+                    />
+                    <Field
+                      label="Account Holder Name"
+                      value={employee.pendingPaymentInfo.accountHolderName}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      disabled={approvePaymentInfoMutation.isPending || rejectPaymentInfoMutation.isPending}
+                      onClick={() => approvePaymentInfoMutation.mutate()}
+                    >
+                      {approvePaymentInfoMutation.isPending && (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      )}
+                      Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={approvePaymentInfoMutation.isPending || rejectPaymentInfoMutation.isPending}
+                      onClick={() => rejectPaymentInfoMutation.mutate()}
+                    >
+                      {rejectPaymentInfoMutation.isPending && (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      )}
+                      Reject
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Statutory Information */}
+          <Card>
+            <CardHeader className="border-b pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-primary" />
+                Statutory Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2 pt-4">
+              <Field label="PAN" value={employee.statutoryInfo?.pan} />
+              <Field label="PF Status" value={<StatutoryBadge status={employee.statutoryInfo?.pfStatus} />} />
+              <Field label="PF UAN" value={employee.statutoryInfo?.pfUan} />
+              <Field
+                label="Professional Tax"
+                value={<StatutoryBadge status={employee.statutoryInfo?.professionalTaxStatus} />}
+              />
+              <Field label="LWF Status" value={<StatutoryBadge status={employee.statutoryInfo?.lwfStatus} />} />
+              <Field label="ESIC Status" value={<StatutoryBadge status={employee.statutoryInfo?.esicStatus} />} />
+              <Field label="ESIC IP Number" value={employee.statutoryInfo?.esicIpNumber} />
+            </CardContent>
+          </Card>
+
+          {/* Other Information */}
+          <Card>
+            <CardHeader className="border-b pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Info className="h-4 w-4 text-primary" />
+                Other Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2 pt-4">
+              <Field
+                label="WhatsApp Integration"
+                value={<Badge variant={employee.whatsappEnabled ? "default" : "outline"}>{employee.whatsappEnabled ? "Enabled" : "Disabled"}</Badge>}
+              />
+            </CardContent>
+          </Card>
         </div>
+      )}
+
+      {activeTab === "overview" && isAdmin && (
+        <LeaveMigrationPanel
+          employeeId={employee.id}
+          employeeName={employee.fullName}
+          isSuperAdmin={user?.role === ROLES.SUPER_ADMIN}
+        />
       )}
 
       {activeTab === "attendance" && (
@@ -363,6 +605,8 @@ export function EmployeeProfileView({
           </CardContent>
         </Card>
       )}
+
+      {activeTab === "documents" && <DocumentsPanel employeeId={employee.id} />}
     </div>
   );
 }

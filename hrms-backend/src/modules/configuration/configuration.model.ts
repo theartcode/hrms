@@ -26,6 +26,9 @@ export interface IOfficeSettings {
   latitude: number | null;
   longitude: number | null;
   allowedRadiusMeters: number;
+  // Auto-fills a new employee's probationEndDate (joiningDate + this many
+  // months) at creation — editable per-employee afterward.
+  defaultProbationMonths: number;
 }
 
 export interface ILeavePolicy {
@@ -59,6 +62,7 @@ export interface INotificationEventToggles {
   EMPLOYEE_CREATED: boolean;
   BIRTHDAY: boolean;
   WORK_ANNIVERSARY: boolean;
+  PROBATION_ENDING: boolean;
 }
 
 export interface INotificationSettings {
@@ -144,6 +148,7 @@ const officeSettingsSchema = new Schema<IOfficeSettings>(
     latitude: { type: Number, default: 17.4502143 },
     longitude: { type: Number, default: 78.3911328 },
     allowedRadiusMeters: { type: Number, required: true, default: 100 },
+    defaultProbationMonths: { type: Number, required: true, default: 3 },
   },
   { _id: false }
 );
@@ -174,6 +179,7 @@ const notificationEventTogglesSchema = new Schema<INotificationEventToggles>(
     EMPLOYEE_CREATED: { type: Boolean, required: true, default: true },
     BIRTHDAY: { type: Boolean, required: true, default: true },
     WORK_ANNIVERSARY: { type: Boolean, required: true, default: true },
+    PROBATION_ENDING: { type: Boolean, required: true, default: true },
   },
   { _id: false }
 );
