@@ -26,6 +26,12 @@ export const adminListQuerySchema = z.object({
   }),
 });
 
+export const notCheckedInQuerySchema = z.object({
+  query: z.object({
+    date: dateString.optional(),
+  }),
+});
+
 export const exportQuerySchema = z.object({
   query: adminListQuerySchema.shape.query.omit({ page: true, limit: true }),
 });

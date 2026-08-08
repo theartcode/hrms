@@ -8,11 +8,30 @@ interface StatCardProps {
   icon: LucideIcon;
   accentClassName?: string;
   hint?: string;
+  onClick?: () => void;
 }
 
-export function StatCard({ label, value, icon: Icon, accentClassName, hint }: StatCardProps) {
+export function StatCard({ label, value, icon: Icon, accentClassName, hint, onClick }: StatCardProps) {
   return (
-    <Card className="group gap-0 border-border/60 py-0 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
+    <Card
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
+      className={cn(
+        "group gap-0 border-border/60 py-0 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md",
+        onClick && "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+      )}
+    >
       <CardContent className="flex items-center gap-4 p-4">
         <div
           className={cn(

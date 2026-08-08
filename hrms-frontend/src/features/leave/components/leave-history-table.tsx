@@ -52,6 +52,10 @@ export function LeaveHistoryTable({ history }: { history: LeaveHistoryItem[] }) 
               <TableCell>
                 {item.source === "NATIVE" ? (
                   <span className="text-xs text-muted-foreground">Native</span>
+                ) : item.source === "MANUAL" ? (
+                  <Badge variant="outline" className="bg-violet-500/10 text-violet-600 dark:text-violet-400 border-transparent">
+                    Manually Added
+                  </Badge>
                 ) : (
                   <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-transparent">
                     Imported Data

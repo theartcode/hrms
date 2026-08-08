@@ -41,6 +41,14 @@ export interface AdminAttendanceRow {
   status: AttendanceStatus;
 }
 
+export interface NotCheckedInEmployee {
+  id: string;
+  employeeId: string;
+  fullName: string;
+  department: string | null;
+  designation: string | null;
+}
+
 export type CorrectionStatus = "PENDING" | "APPROVED" | "REJECTED";
 
 export interface AttendanceCorrection {

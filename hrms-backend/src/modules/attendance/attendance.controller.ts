@@ -92,6 +92,12 @@ async function adminList(req: Request, res: Response): Promise<void> {
   sendSuccess(res, result);
 }
 
+async function notCheckedIn(req: Request, res: Response): Promise<void> {
+  const query = req.validated!.query as { date?: string };
+  const employees = await attendanceService.getNotCheckedInToday(query.date);
+  sendSuccess(res, { employees });
+}
+
 async function adminExport(req: Request, res: Response): Promise<void> {
   const query = req.validated!.query as Parameters<
     typeof attendanceService.exportAttendanceCsv
@@ -112,4 +118,5 @@ export {
   summary,
   adminList,
   adminExport,
+  notCheckedIn,
 };

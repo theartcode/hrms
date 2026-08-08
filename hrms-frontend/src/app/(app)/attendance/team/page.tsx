@@ -29,6 +29,7 @@ function TeamAttendanceContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const now = new Date();
+  const correctionHighlightId = searchParams.get("correctionId") ?? undefined;
   const [filters, setFilters] = useState<AdminAttendanceFilterValues>({
     year: now.getFullYear(),
     month: now.getMonth() + 1,
@@ -93,7 +94,7 @@ function TeamAttendanceContent() {
         onPageChange={setPage}
       />
 
-      <AdminCorrectionsPanel />
+      <AdminCorrectionsPanel highlightId={correctionHighlightId} />
     </div>
   );
 }

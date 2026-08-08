@@ -9,6 +9,7 @@ import { enumerateISTDateStrings, getISTDateString } from "../../shared/utils/is
 import { recordActivity } from "../activity-log/activity-log.service";
 import { HolidayModel } from "../holiday/holiday.model";
 import { UserModel } from "../user/user.model";
+import { LOGIN_ALLOWED_STATUSES } from "../../shared/constants/employeeStatus";
 import { isConfiguredWeekend } from "../configuration/configuration.cache";
 import { resolveViewableEmployeeId as resolveViewableEmployeeIdShared } from "../../shared/utils/resolveViewableEmployeeId";
 import { AttendanceModel, IAttendance } from "./attendance.model";
@@ -421,6 +422,43 @@ export async function adminListAttendance(query: AdminListQuery) {
       totalPages: Math.max(1, Math.ceil(total / query.limit)),
     },
   };
+}
+
+export interface NotCheckedInEmployee {
+  id: string;
+  employeeId: string;
+  fullName: string;
+  department: string | null;
+  designation: string | null;
+}
+
+export async function getNotCheckedInToday(date?: string): Promise<NotCheckedInEmployee[]> {
+  const dateStr = date ?? getISTDateString(new Date());
+
+  const [employees, checkedInEmployeeIds] = await Promise.all([
+    UserModel.find({ status: { $in: LOGIN_ALLOWED_STATUSES } })
+      .select("employeeId fullName department designation")
+      .populate([
+        { path: "department", select: "name" },
+        { path: "designation", select: "name" },
+      ]),
+    AttendanceModel.find({ date: dateStr, checkIn: { $ne: null } }).distinct("employee"),
+  ]);
+
+  const checkedInSet = new Set(checkedInEmployeeIds.map((id) => String(id)));
+
+  return employees
+    .filter((e) => !checkedInSet.has(String(e._id)))
+    .map((e) => {
+      const emp = e as unknown as PopulatedAttendanceEmployee;
+      return {
+        id: String(emp._id),
+        employeeId: emp.employeeId,
+        fullName: emp.fullName,
+        department: emp.department?.name ?? null,
+        designation: emp.designation?.name ?? null,
+      };
+    });
 }
 
 export async function exportAttendanceCsv(

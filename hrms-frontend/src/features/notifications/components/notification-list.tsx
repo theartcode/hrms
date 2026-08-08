@@ -11,7 +11,7 @@ import { NotificationCard } from "./notification-card";
 
 const PAGE_SIZE = 15;
 
-export function NotificationList() {
+export function NotificationList({ onNavigate }: { onNavigate?: () => void } = {}) {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [accumulated, setAccumulated] = useState<Notification[]>([]);
@@ -86,6 +86,7 @@ export function NotificationList() {
               key={notification.id}
               notification={notification}
               onMarkRead={(id) => markReadMutation.mutate(id)}
+              onNavigate={onNavigate}
             />
           ))}
       </div>

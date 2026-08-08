@@ -5,6 +5,7 @@ import {
   AttendanceRecord,
   DayStatusEntry,
   MonthSummary,
+  NotCheckedInEmployee,
   PaginationInfo,
 } from "@/types/attendance.types";
 
@@ -96,6 +97,12 @@ export function adminList(params: AdminListParams) {
   return apiFetch<
     ApiSuccess<{ records: AdminAttendanceRow[]; pagination: PaginationInfo }>
   >(`${API_ENDPOINTS.ATTENDANCE.ADMIN_LIST}${toQueryString({ ...params })}`);
+}
+
+export function notCheckedInToday(date?: string) {
+  return apiFetch<ApiSuccess<{ employees: NotCheckedInEmployee[] }>>(
+    `${API_ENDPOINTS.ATTENDANCE.ADMIN_NOT_CHECKED_IN}${toQueryString({ date })}`
+  );
 }
 
 export async function exportCsv(

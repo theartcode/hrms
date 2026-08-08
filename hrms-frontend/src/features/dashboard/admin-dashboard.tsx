@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Building2,
@@ -21,6 +22,7 @@ import * as dashboardService from "@/services/dashboard.service";
 import { STATUS_CHART_COLORS } from "./chart-colors";
 import { WelcomeHeader } from "./components/welcome-header";
 import { StatCard } from "./components/stat-card";
+import { AttendanceListDialog, AttendanceListMode } from "./components/attendance-list-dialog";
 import { ChartCard } from "./components/chart-card";
 import { DashboardSection } from "./components/dashboard-section";
 import { ActivityTimeline } from "./components/activity-timeline";
@@ -86,6 +88,7 @@ export function AdminDashboard() {
     queryKey: ["admin-dashboard"],
     queryFn: () => dashboardService.getAdminDashboard().then((res) => res.data),
   });
+  const [attendanceListMode, setAttendanceListMode] = useState<AttendanceListMode>(null);
 
   return (
     <div className="flex flex-col gap-6">
@@ -105,12 +108,14 @@ export function AdminDashboard() {
             value={data?.kpis.checkedInToday ?? "—"}
             icon={LogIn}
             accentClassName="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+            onClick={() => setAttendanceListMode("checkedIn")}
           />
           <StatCard
             label="Not Checked In"
             value={data?.kpis.notCheckedInToday ?? "—"}
             icon={LogOut}
             accentClassName="bg-rose-500/10 text-rose-600 dark:text-rose-400"
+            onClick={() => setAttendanceListMode("notCheckedIn")}
           />
           <StatCard
             label="Late Today"
@@ -223,6 +228,8 @@ export function AdminDashboard() {
       <ActivityTimeline activities={data?.recentActivity} isLoading={isLoading} />
 
       <QuickActions actions={QUICK_ACTIONS} />
+
+      <AttendanceListDialog mode={attendanceListMode} onClose={() => setAttendanceListMode(null)} />
     </div>
   );
 }

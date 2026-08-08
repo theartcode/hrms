@@ -11,6 +11,10 @@ import { LEAVE_TYPES, LeaveType } from "../../shared/constants/leaveTypes";
 export const LEAVE_IMPORT_SOURCE = {
   RAZORPAY: "RAZORPAY",
   OTHER: "OTHER",
+  // A single row an admin typed in directly (not a file upload) — same
+  // immutability/lock rules as any other import row, just with its own
+  // one-row "batch" and a distinct badge in the UI.
+  MANUAL: "MANUAL",
 } as const;
 export type LeaveImportSource = (typeof LEAVE_IMPORT_SOURCE)[keyof typeof LEAVE_IMPORT_SOURCE];
 

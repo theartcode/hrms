@@ -92,13 +92,15 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 
 export function EmployeeProfileView({
   employee,
+  initialTab = "overview",
 }: {
   employee: Employee;
   attendanceHref?: string;
+  initialTab?: "overview" | "attendance" | "documents";
 }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"overview" | "attendance" | "documents">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "attendance" | "documents">(initialTab);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -162,6 +164,15 @@ export function EmployeeProfileView({
   });
 
   const isAdmin = user?.role === ROLES.ADMIN || user?.role === ROLES.SUPER_ADMIN;
+  // isAdmin alone isn't enough to gate admin-only actions below — it's
+  // just "does the logged-in user have an admin role," which stays true
+  // even when that admin is looking at their OWN profile (e.g. via
+  // /profile). Without this, an admin could approve/reject their own
+  // pending bank details change, or see the Leave Migration panel for
+  // managing their own leave — both admin-on-someone-else tools that
+  // should never apply to viewing yourself.
+  const isViewingSelf = user?.id === employee.id;
+  const isAdminViewingOther = isAdmin && !isViewingSelf;
 
   const approvePaymentInfoMutation = useMutation({
     mutationFn: () => employeeService.approvePaymentInfoChange(employee.id),
@@ -412,7 +423,7 @@ export function EmployeeProfileView({
                 <Field label="Account Holder Name" value={employee.paymentInfo?.accountHolderName} />
               </div>
 
-              {isAdmin && employee.paymentInfoReviewStatus === "PENDING" && employee.pendingPaymentInfo && (
+              {isAdminViewingOther && employee.paymentInfoReviewStatus === "PENDING" && employee.pendingPaymentInfo && (
                 <div className="flex flex-col gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
                   <p className="text-sm font-medium">Submitted bank details awaiting approval</p>
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -494,7 +505,7 @@ export function EmployeeProfileView({
         </div>
       )}
 
-      {activeTab === "overview" && isAdmin && (
+      {activeTab === "overview" && isAdminViewingOther && (
         <LeaveMigrationPanel
           employeeId={employee.id}
           employeeName={employee.fullName}

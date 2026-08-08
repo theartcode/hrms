@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ArrowLeft, BadgeCheck, Mail, Pencil, Power, PowerOff, Trash2 } from "lucide-react";
@@ -32,11 +32,18 @@ export default function EmployeeDetailPage() {
   );
 }
 
+const PROFILE_TABS = ["overview", "attendance", "documents"] as const;
+
 function EmployeeDetailContent() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const requestedTab = searchParams.get("tab");
+  const initialTab = (PROFILE_TABS as readonly string[]).includes(requestedTab ?? "")
+    ? (requestedTab as (typeof PROFILE_TABS)[number])
+    : "overview";
   const [editOpen, setEditOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -194,6 +201,7 @@ function EmployeeDetailContent() {
       <EmployeeProfileView
         employee={data}
         attendanceHref={`${ROUTES.ATTENDANCE_TEAM}?employeeId=${data.id}`}
+        initialTab={initialTab}
       />
 
       <Sheet open={editOpen} onOpenChange={setEditOpen}>

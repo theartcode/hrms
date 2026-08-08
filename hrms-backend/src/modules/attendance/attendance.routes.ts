@@ -7,6 +7,7 @@ import {
   adminListQuerySchema,
   exportQuerySchema,
   monthQuerySchema,
+  notCheckedInQuerySchema,
 } from "./attendance.validation";
 import * as attendanceController from "./attendance.controller";
 
@@ -39,6 +40,12 @@ router.get(
   manage,
   validate(exportQuerySchema),
   attendanceController.adminExport
+);
+router.get(
+  "/admin/not-checked-in",
+  manage,
+  validate(notCheckedInQuerySchema),
+  attendanceController.notCheckedIn
 );
 
 export default router;

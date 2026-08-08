@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import * as notificationService from "@/services/notification.service";
 import { NotificationList } from "./notification-list";
 
 export function NotificationBell() {
+  const [open, setOpen] = useState(false);
   const { data } = useQuery({
     queryKey: ["notifications-unread-count"],
     queryFn: () => notificationService.getUnreadCount().then((res) => res.data.count),
@@ -16,7 +18,7 @@ export function NotificationBell() {
   const count = data ?? 0;
 
   return (
-    <Sheet>
+    <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger
         render={
           <Button
@@ -39,7 +41,7 @@ export function NotificationBell() {
           <SheetTitle>Notifications</SheetTitle>
         </SheetHeader>
         <div className="flex-1 overflow-y-auto px-4 pb-4">
-          <NotificationList />
+          <NotificationList onNavigate={() => setOpen(false)} />
         </div>
       </SheetContent>
     </Sheet>

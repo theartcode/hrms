@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Users, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ROUTES } from "@/constants/routes";
@@ -12,7 +13,10 @@ import { TaskDetailSheet } from "@/features/tasks/components/task-detail-sheet";
 
 export default function TasksPage() {
   const { user } = useAuth();
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(
+    searchParams.get("taskId")
+  );
 
   const isDepartmentHead = (user?.departmentHeadOf.length ?? 0) > 0;
   const isAdmin = user?.role === ROLES.ADMIN || user?.role === ROLES.SUPER_ADMIN;

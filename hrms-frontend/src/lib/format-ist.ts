@@ -1,5 +1,9 @@
 const IST_TIMEZONE = "Asia/Kolkata";
 
+export function getISTDateString(date: Date = new Date()): string {
+  return date.toLocaleDateString("en-CA", { timeZone: IST_TIMEZONE });
+}
+
 export function formatISTTime(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleTimeString("en-IN", {

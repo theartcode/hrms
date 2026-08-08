@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { LeaveHistoryTable } from "./leave-history-table";
 import { LeaveImportWizard } from "./leave-import-wizard";
+import { AddManualLeaveDialog } from "./add-manual-leave-dialog";
 import { LeaveMigrationConfirmDialog } from "./leave-migration-confirm-dialog";
 import { EmployeeLeaveAllocations } from "./employee-leave-allocations";
 import { LEAVE_TYPE_LABELS } from "@/features/leave/leave-status-meta";
@@ -141,7 +142,10 @@ export function LeaveMigrationPanel({
 
           {data.migrationStatus === "NOT_STARTED" && (
             <div className="flex flex-col gap-4 border-t pt-4">
-              <p className="text-sm font-medium">Import Historical Records</p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">Import Historical Records</p>
+                <AddManualLeaveDialog employeeId={employeeId} onAdded={refresh} />
+              </div>
               <LeaveImportWizard
                 employeeId={employeeId}
                 importBatches={data.importBatches}

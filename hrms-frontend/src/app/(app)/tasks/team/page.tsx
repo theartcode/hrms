@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,10 +37,13 @@ export default function TeamTasksPage() {
 
 function TeamTasksContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [filters, setFilters] = useState<TaskFilterValues>({});
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(
+    searchParams.get("taskId")
+  );
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["team-tasks", filters, page],

@@ -311,8 +311,8 @@ export function LeaveImportWizard({ employeeId, importBatches, onChanged }: Leav
           {importBatches.map((batch) => (
             <div key={batch.batchId} className="flex items-center justify-between rounded-lg border p-2 text-sm">
               <span>
-                {batch.sourceFilename ?? "Untitled file"} — {batch.rowCount} row(s), imported{" "}
-                {new Date(batch.importedAt).toLocaleDateString("en-IN")}
+                {batch.sourceFilename ?? (batch.source === "MANUAL" ? "Manual entry" : "Untitled file")} —{" "}
+                {batch.rowCount} row(s), imported {new Date(batch.importedAt).toLocaleDateString("en-IN")}
               </span>
               <Button
                 type="button"

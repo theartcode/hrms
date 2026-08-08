@@ -56,6 +56,7 @@ export const API_ENDPOINTS = {
     SUMMARY: "/attendance/summary",
     ADMIN_LIST: "/attendance/admin",
     ADMIN_EXPORT: "/attendance/admin/export",
+    ADMIN_NOT_CHECKED_IN: "/attendance/admin/not-checked-in",
   },
   ATTENDANCE_CORRECTIONS: {
     CREATE: "/attendance/corrections",

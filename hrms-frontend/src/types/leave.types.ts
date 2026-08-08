@@ -94,7 +94,7 @@ export type AdjustableBalanceField =
   | "compOffGranted"
   | "compOffUsed";
 
-export type LeaveImportSource = "RAZORPAY" | "OTHER";
+export type LeaveImportSource = "RAZORPAY" | "OTHER" | "MANUAL";
 export type LeaveImportStatus = "APPROVED" | "REJECTED" | "CANCELLED";
 
 // One row of the merged history the Analysis screen shows — either a
