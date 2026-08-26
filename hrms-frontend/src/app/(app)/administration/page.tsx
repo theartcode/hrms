@@ -94,8 +94,8 @@ const CATEGORIES = [
     icon: FileSpreadsheet,
   },
   {
-    title: "Comp Off Leaves",
-    description: "Grant Comp Off leaves to employees and track allocation history.",
+    title: "Manage Leaves",
+    description: "Add or remove leave balances for individual employees.",
     href: ROUTES.ADMINISTRATION_LEAVE_MANAGEMENT,
     icon: CalendarPlus,
   },

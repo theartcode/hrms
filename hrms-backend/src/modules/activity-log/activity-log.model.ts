@@ -21,7 +21,11 @@ export interface IActivityLog extends Document {
     | "Announcement"
     | "EmployeeDocument"
     | "Task"
-    | "AdobeLicenseSheet";
+    | "AdobeLicenseSheet"
+    | "ITProduct"
+    | "ITProject"
+    | "ITWorkItem"
+    | "ITWorkManagementSettings";
   targetId: Types.ObjectId;
   metadata?: Record<string, unknown>;
   createdAt: Date;
@@ -51,6 +55,10 @@ const activityLogSchema = new Schema<IActivityLog>(
         "EmployeeDocument",
         "Task",
         "AdobeLicenseSheet",
+        "ITProduct",
+        "ITProject",
+        "ITWorkItem",
+        "ITWorkManagementSettings",
       ],
       required: true,
     },
@@ -61,6 +69,11 @@ const activityLogSchema = new Schema<IActivityLog>(
 );
 
 activityLogSchema.index({ createdAt: -1 });
+// Phase 1E-A: the IT Head Dashboard is the first caller to query activity
+// globally scoped by targetType (recent activity + today's team activity,
+// across every ITWorkItem rather than one at a time) — additive only, does
+// not change any existing query's behavior.
+activityLogSchema.index({ targetType: 1, createdAt: -1 });
 
 export const ActivityLogModel = model<IActivityLog>(
   "ActivityLog",

@@ -11,8 +11,27 @@ import { SettingsSection } from "@/features/administration/components/settings-s
 import { SaveBar } from "@/features/administration/components/save-bar";
 import { NumberInput } from "@/features/administration/components/number-input";
 import { ToggleRow } from "@/features/administration/components/toggle-row";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Check, Settings2 } from "lucide-react";
 import * as configurationService from "@/services/configuration.service";
-import { Configuration, LeavePolicy } from "@/types/configuration.types";
+import { Configuration, LeavePolicy, LeaveTypePolicy } from "@/types/configuration.types";
+import { LEAVE_TYPES, LeaveType } from "@/constants/leave-types";
+
+const leaveTypeOptions: { value: LeaveType; label: string }[] = [
+  { value: LEAVE_TYPES.SICK, label: "Sick Leave" },
+  { value: LEAVE_TYPES.CASUAL_PAID, label: "Casual Leave" },
+  { value: LEAVE_TYPES.ANNUAL, label: "Annual Leave" },
+  { value: LEAVE_TYPES.UNPAID, label: "Unpaid Leave" },
+  { value: LEAVE_TYPES.COMP_OFF, label: "Comp Off" },
+];
 
 export default function LeavePolicyPage() {
   return (
@@ -27,7 +46,8 @@ export default function LeavePolicyPage() {
 
 function LeavePolicyForm({ config }: { config: Configuration }) {
   const queryClient = useQueryClient();
-  const [draft, setDraft] = useState<LeavePolicy>(config.leavePolicy);
+  const [draft, setDraft] = useState<LeavePolicy>(() => withLeaveTypeDefaults(config.leavePolicy));
+  const [editingType, setEditingType] = useState<LeaveType | null>(null);
 
   const isDirty = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(config.leavePolicy),
@@ -45,7 +65,43 @@ function LeavePolicyForm({ config }: { config: Configuration }) {
 
   return (
     <>
-      <SettingsSection title="Leave Quotas">
+      <SettingsSection
+        title="Leave Type Settings"
+        description="Set advance notice and duration limits independently for every leave type."
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          {leaveTypeOptions.map(({ value, label }, index) => {
+            const settings = draft.leaveTypeSettings?.[value];
+            return (
+              <div key={value} className="group flex items-center justify-between gap-4 rounded-xl border bg-muted/20 p-4 transition-colors hover:bg-muted/40">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${[
+                    "bg-sky-500/15 text-sky-600",
+                    "bg-emerald-500/15 text-emerald-600",
+                    "bg-violet-500/15 text-violet-600",
+                    "bg-amber-500/15 text-amber-600",
+                    "bg-rose-500/15 text-rose-600",
+                  ][index]}`}>
+                    <Check className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-medium">{label}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {settings?.advanceNoticeDays ?? 0} day(s) notice, {settings?.minDurationDays ?? 1}–{settings?.maxDurationDays ?? 30} working day(s)
+                    </p>
+                  </div>
+                </div>
+                <Button variant="outline" size="sm" className="shrink-0" onClick={() => setEditingType(value)}>
+                  <Settings2 />
+                  Settings
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      </SettingsSection>
+
+      <SettingsSection title="Leave Quotas" description="Set the recurring entitlement and accrual rules used by the leave balance engine.">
         <div className="grid gap-4 sm:grid-cols-2">
           <NumberInput
             id="sick-quota"
@@ -66,15 +122,6 @@ function LeavePolicyForm({ config }: { config: Configuration }) {
             onChange={(casualPaidQuotaPerHalf) => setDraft({ ...draft, casualPaidQuotaPerHalf })}
           />
           <NumberInput
-            id="casual-notice"
-            label="Casual Leave Advance Notice"
-            suffix="day(s)"
-            value={draft.casualPaidNoticeDays}
-            min={0}
-            max={90}
-            onChange={(casualPaidNoticeDays) => setDraft({ ...draft, casualPaidNoticeDays })}
-          />
-          <NumberInput
             id="annual-accrual"
             label="Annual Leave Accrual"
             suffix="days / no-leave month"
@@ -83,15 +130,6 @@ function LeavePolicyForm({ config }: { config: Configuration }) {
             max={10}
             step={0.25}
             onChange={(annualAccrualPerMonth) => setDraft({ ...draft, annualAccrualPerMonth })}
-          />
-          <NumberInput
-            id="annual-notice"
-            label="Annual Leave Advance Notice"
-            suffix="day(s)"
-            value={draft.annualNoticeDays}
-            min={0}
-            max={90}
-            onChange={(annualNoticeDays) => setDraft({ ...draft, annualNoticeDays })}
           />
         </div>
         <ToggleRow
@@ -110,28 +148,18 @@ function LeavePolicyForm({ config }: { config: Configuration }) {
         />
       </SettingsSection>
 
-      <SettingsSection title="Duration Limits">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <NumberInput
-            id="min-duration"
-            label="Minimum Leave Duration"
-            suffix="working day(s)"
-            value={draft.minDurationDays}
-            min={1}
-            max={365}
-            onChange={(minDurationDays) => setDraft({ ...draft, minDurationDays })}
-          />
-          <NumberInput
-            id="max-duration"
-            label="Maximum Leave Duration"
-            suffix="working day(s)"
-            value={draft.maxDurationDays}
-            min={1}
-            max={365}
-            onChange={(maxDurationDays) => setDraft({ ...draft, maxDurationDays })}
-          />
-        </div>
-      </SettingsSection>
+      <LeaveTypeSettingsDialog
+        type={editingType}
+        settings={editingType ? draft.leaveTypeSettings?.[editingType] : undefined}
+        onOpenChange={(open) => !open && setEditingType(null)}
+        onChange={(settings) => {
+          if (!editingType) return;
+          setDraft({
+            ...draft,
+            leaveTypeSettings: { ...draft.leaveTypeSettings, [editingType]: settings },
+          });
+        }}
+      />
 
       <SaveBar
         visible={isDirty}
@@ -140,5 +168,80 @@ function LeavePolicyForm({ config }: { config: Configuration }) {
         onDiscard={() => setDraft(config.leavePolicy)}
       />
     </>
+  );
+}
+
+function withLeaveTypeDefaults(policy: LeavePolicy): LeavePolicy {
+  const defaults: LeaveTypePolicy = {
+    advanceNoticeDays: 0,
+    minDurationDays: policy.minDurationDays,
+    maxDurationDays: policy.maxDurationDays,
+  };
+  return {
+    ...policy,
+    leaveTypeSettings: {
+      SICK: { ...defaults },
+      CASUAL_PAID: { ...defaults, advanceNoticeDays: policy.casualPaidNoticeDays },
+      ANNUAL: { ...defaults, advanceNoticeDays: policy.annualNoticeDays },
+      UNPAID: { ...defaults },
+      COMP_OFF: { ...defaults },
+      ...policy.leaveTypeSettings,
+    },
+  };
+}
+
+function LeaveTypeSettingsDialog({
+  type,
+  settings,
+  onOpenChange,
+  onChange,
+}: {
+  type: LeaveType | null;
+  settings?: LeaveTypePolicy;
+  onOpenChange: (open: boolean) => void;
+  onChange: (settings: LeaveTypePolicy) => void;
+}) {
+  const label = leaveTypeOptions.find((option) => option.value === type)?.label;
+  const current = settings ?? { advanceNoticeDays: 0, minDurationDays: 1, maxDurationDays: 30 };
+
+  return (
+    <Dialog open={type !== null} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{label} Settings</DialogTitle>
+          <DialogDescription>Set the rules employees must meet when applying for this leave.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4">
+          <NumberInput
+            id="leave-advance-notice"
+            label="Advance Notice"
+            suffix="day(s)"
+            value={current.advanceNoticeDays}
+            min={0}
+            max={365}
+            onChange={(advanceNoticeDays) => onChange({ ...current, advanceNoticeDays })}
+          />
+          <NumberInput
+            id="leave-min-duration"
+            label="Minimum Duration"
+            suffix="working day(s)"
+            value={current.minDurationDays}
+            min={1}
+            max={365}
+            onChange={(minDurationDays) => onChange({ ...current, minDurationDays })}
+          />
+          <NumberInput
+            id="leave-max-duration"
+            label="Maximum Duration"
+            suffix="working day(s)"
+            value={current.maxDurationDays}
+            min={1}
+            max={365}
+            onChange={(maxDurationDays) => onChange({ ...current, maxDurationDays })}
+          />
+        </div>
+        <DialogFooter showCloseButton />
+      </DialogContent>
+    </Dialog>
   );
 }

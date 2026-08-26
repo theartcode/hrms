@@ -58,6 +58,15 @@ async function grantExtra(req: Request, res: Response): Promise<void> {
   sendSuccess(res, { allocation }, "Extra leave granted successfully", 201);
 }
 
+async function adjustBalance(req: Request, res: Response): Promise<void> {
+  const result = await leaveService.adjustLeaveBalance(
+    req.user!,
+    String(req.params.employeeId),
+    req.body
+  );
+  sendSuccess(res, result, "Leave balance adjusted successfully");
+}
+
 async function listAllocations(req: Request, res: Response): Promise<void> {
   const query = req.query as { employeeId?: string; year?: string };
   const allocations = await leaveService.listLeaveAllocations({
@@ -133,6 +142,7 @@ export {
   approve,
   reject,
   grantExtra,
+  adjustBalance,
   listAllocations,
   updateAllocation,
   deleteAllocation,

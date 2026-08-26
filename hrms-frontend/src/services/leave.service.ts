@@ -67,6 +67,21 @@ export function getBalance(params: { employeeId?: string; year?: number } = {}) 
   );
 }
 
+export interface AdjustLeaveBalanceInput {
+  leaveType: string;
+  period?: string;
+  year: number;
+  delta: number;
+  reason: string;
+}
+
+export function adjustLeaveBalance(employeeId: string, input: AdjustLeaveBalanceInput) {
+  return apiFetch<ApiSuccess<{ adjusted: boolean }>>(API_ENDPOINTS.LEAVES.ADJUST_BALANCE(employeeId), {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
 export function cancelLeave(id: string) {
   return apiFetch<ApiSuccess<{ leave: LeaveRequest }>>(API_ENDPOINTS.LEAVES.CANCEL(id), {
     method: "PATCH",

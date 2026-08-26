@@ -5,6 +5,7 @@ import { validate } from "../../shared/middleware/validate";
 import { ROLES } from "../../shared/constants/roles";
 import {
   adminListLeavesSchema,
+  adjustBalanceSchema,
   applyLeaveSchema,
   balanceQuerySchema,
   confirmLeaveMigrationSchema,
@@ -37,6 +38,12 @@ router.patch(
 router.get("/", manage, validate(adminListLeavesSchema), leaveController.adminList);
 router.post("/allocations", manage, validate(grantExtraLeaveSchema), leaveController.grantExtra);
 router.get("/allocations", manage, leaveController.listAllocations);
+router.patch(
+  "/balance/:employeeId",
+  manage,
+  validate(adjustBalanceSchema),
+  leaveController.adjustBalance
+);
 router.put(
   "/allocations/:id",
   manage,

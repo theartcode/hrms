@@ -69,6 +69,7 @@ export const API_ENDPOINTS = {
     APPLY: "/leaves",
     MINE: "/leaves/me",
     BALANCE: "/leaves/balance",
+    ADJUST_BALANCE: (employeeId: string) => `/leaves/balance/${employeeId}`,
     CANCEL: (id: string) => `/leaves/${id}/cancel`,
     ADMIN_LIST: "/leaves",
     APPROVE: (id: string) => `/leaves/${id}/approve`,
@@ -162,6 +163,56 @@ export const API_ENDPOINTS = {
     ATTACHMENTS: (taskId: string) => `/tasks/${taskId}/attachments`,
     ATTACHMENT_DOWNLOAD_URL: (attachmentId: string) =>
       `/task-attachments/${attachmentId}/download-url`,
+  },
+  IT_WORK_MANAGEMENT: {
+    ACCESS_ME: "/it-work-management/access/me",
+    DASHBOARD: "/it-work-management/dashboard",
+    MY_DASHBOARD: "/it-work-management/my-dashboard",
+    EXECUTIVE_DASHBOARD: "/it-work-management/executive-dashboard",
+    READONLY_VIEWERS: {
+      LIST: "/it-work-management/settings/readonly-viewers",
+      GRANT: (userId: string) => `/it-work-management/settings/readonly-viewers/${userId}`,
+      REVOKE: (userId: string) => `/it-work-management/settings/readonly-viewers/${userId}`,
+    },
+    PRODUCTS: {
+      LIST: "/it-work-management/products",
+      CREATE: "/it-work-management/products",
+      UPDATE: (id: string) => `/it-work-management/products/${id}`,
+      ACTIVATE: (id: string) => `/it-work-management/products/${id}/activate`,
+      DEACTIVATE: (id: string) => `/it-work-management/products/${id}/deactivate`,
+    },
+    PROJECTS: {
+      LIST: "/it-work-management/projects",
+      CREATE: "/it-work-management/projects",
+      DETAIL: (id: string) => `/it-work-management/projects/${id}`,
+      UPDATE: (id: string) => `/it-work-management/projects/${id}`,
+      STATUS: (id: string) => `/it-work-management/projects/${id}/status`,
+    },
+    WORK_ITEMS: {
+      LIST: "/it-work-management/work-items",
+      CREATE: "/it-work-management/work-items",
+      PROPOSE: "/it-work-management/work-items/propose",
+      APPROVE_PROPOSAL: (id: string) => `/it-work-management/work-items/${id}/approve-proposal`,
+      REJECT_PROPOSAL: (id: string) => `/it-work-management/work-items/${id}/reject-proposal`,
+      REQUEST_PROPOSAL_CHANGES: (id: string) =>
+        `/it-work-management/work-items/${id}/request-proposal-changes`,
+      UPDATE_PROPOSAL: (id: string) => `/it-work-management/work-items/${id}/proposal`,
+      DETAIL: (id: string) => `/it-work-management/work-items/${id}`,
+      UPDATE: (id: string) => `/it-work-management/work-items/${id}`,
+      ASSIGNMENT: (id: string) => `/it-work-management/work-items/${id}/assignment`,
+      STATUS: (id: string) => `/it-work-management/work-items/${id}/status`,
+      SUBMIT_REVIEW: (id: string) => `/it-work-management/work-items/${id}/submit-review`,
+      REVIEW: (id: string) => `/it-work-management/work-items/${id}/review`,
+      ACTIVITY: (id: string) => `/it-work-management/work-items/${id}/activity`,
+      COMMENTS: (id: string) => `/it-work-management/work-items/${id}/comments`,
+      COMMENT_DETAIL: (id: string, commentId: string) =>
+        `/it-work-management/work-items/${id}/comments/${commentId}`,
+      ATTACHMENTS: (id: string) => `/it-work-management/work-items/${id}/attachments`,
+      ATTACHMENT_DOWNLOAD_URL: (id: string, attachmentId: string) =>
+        `/it-work-management/work-items/${id}/attachments/${attachmentId}/download`,
+      ATTACHMENT_DELETE: (id: string, attachmentId: string) =>
+        `/it-work-management/work-items/${id}/attachments/${attachmentId}`,
+    },
   },
   ADOBE_LICENSES: {
     GET: "/adobe-licenses",

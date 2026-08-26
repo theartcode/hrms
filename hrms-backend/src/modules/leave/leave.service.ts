@@ -392,6 +392,31 @@ interface ApplyLeaveInput {
   reason: string;
 }
 
+function getLeaveTypePolicy(leaveType: LeaveType, policy: ReturnType<typeof getLeavePolicy>) {
+  const configured = policy.leaveTypeSettings?.[leaveType];
+  if (configured) return configured;
+
+  return {
+    advanceNoticeDays:
+      leaveType === LEAVE_TYPES.CASUAL_PAID
+        ? policy.casualPaidNoticeDays
+        : leaveType === LEAVE_TYPES.ANNUAL
+          ? policy.annualNoticeDays
+          : 0,
+    minDurationDays: policy.minDurationDays,
+    maxDurationDays: policy.maxDurationDays,
+  };
+}
+
+function validateAdvanceNotice(leaveType: LeaveType, startDate: string, policy: ReturnType<typeof getLeavePolicy>) {
+  const noticeDays = getLeaveTypePolicy(leaveType, policy).advanceNoticeDays;
+  const notice = daysBetweenDateStrings(getISTDateString(), startDate);
+  if (notice < noticeDays) {
+    const label = leaveType === LEAVE_TYPES.CASUAL_PAID ? "Casual" : leaveType === LEAVE_TYPES.ANNUAL ? "Annual" : leaveType === LEAVE_TYPES.COMP_OFF ? "Comp Off" : leaveType === LEAVE_TYPES.UNPAID ? "Unpaid" : "Sick";
+    throw new ApiError(422, `${label} leave requires at least ${noticeDays} day(s) advance notice`);
+  }
+}
+
 export async function applyLeave(actor: Actor, input: ApplyLeaveInput) {
   if (input.startDate > input.endDate) {
     throw new ApiError(400, "Start date must be before or equal to the end date");
@@ -427,20 +452,7 @@ export async function applyLeave(actor: Actor, input: ApplyLeaveInput) {
     throw new ApiError(403, "Unpaid leave is not permitted under the current leave policy");
   }
 
-  if (input.leaveType === LEAVE_TYPES.CASUAL_PAID || input.leaveType === LEAVE_TYPES.ANNUAL) {
-    const noticeDays =
-      input.leaveType === LEAVE_TYPES.CASUAL_PAID
-        ? policy.casualPaidNoticeDays
-        : policy.annualNoticeDays;
-    const notice = daysBetweenDateStrings(getISTDateString(), input.startDate);
-    if (notice < noticeDays) {
-      const label = input.leaveType === LEAVE_TYPES.CASUAL_PAID ? "Casual" : "Annual";
-      throw new ApiError(
-        422,
-        `${label} leave requires at least ${noticeDays} day(s) advance notice`
-      );
-    }
-  }
+  validateAdvanceNotice(input.leaveType, input.startDate, policy);
 
   const days = await computeLeaveWorkingDays(input.startDate, input.endDate);
   if (days <= 0) {
@@ -449,11 +461,12 @@ export async function applyLeave(actor: Actor, input: ApplyLeaveInput) {
       "The selected range doesn't include any working days (weekends/holidays only)"
     );
   }
-  if (days < policy.minDurationDays) {
-    throw new ApiError(400, `Leave must be at least ${policy.minDurationDays} working day(s)`);
+  const typePolicy = getLeaveTypePolicy(input.leaveType, policy);
+  if (days < typePolicy.minDurationDays) {
+    throw new ApiError(400, `Leave must be at least ${typePolicy.minDurationDays} working day(s)`);
   }
-  if (days > policy.maxDurationDays) {
-    throw new ApiError(400, `Leave cannot exceed ${policy.maxDurationDays} working day(s)`);
+  if (days > typePolicy.maxDurationDays) {
+    throw new ApiError(400, `Leave cannot exceed ${typePolicy.maxDurationDays} working day(s)`);
   }
 
   // Rule: Paid leaves cannot exceed 2 working days. Requests > 2 days must be Unpaid Leave.
@@ -665,6 +678,7 @@ export async function approveLeave(actor: Actor, leaveId: string, comment?: stri
 
       const year = Number(leave.startDate.slice(0, 4));
       const policy = getLeavePolicy();
+      validateAdvanceNotice(leave.leaveType, leave.startDate, policy);
 
       let balance = await LeaveBalanceModel.findOne({
         employee: leave.employee,
@@ -906,10 +920,14 @@ export interface GrantExtraLeaveInput {
   year?: number;
 }
 
-export async function grantExtraLeave(actor: Actor, input: GrantExtraLeaveInput) {
+export async function grantExtraLeave(
+  actor: Actor,
+  input: GrantExtraLeaveInput,
+  options?: { skipMigrationCheck?: boolean }
+) {
   const employee = await UserModel.findById(input.employeeId);
   if (!employee) throw new ApiError(404, "Employee not found");
-  assertLeaveMigrationConfirmed(employee);
+  if (!options?.skipMigrationCheck) assertLeaveMigrationConfirmed(employee);
 
   const year = input.year ?? new Date().getFullYear();
 
@@ -977,6 +995,80 @@ export async function grantExtraLeave(actor: Actor, input: GrantExtraLeaveInput)
   });
 
   return allocation;
+}
+
+export async function adjustLeaveBalance(
+  actor: Actor,
+  employeeId: string,
+  input: { leaveType: LeaveType; period?: AllocationPeriod; year: number; delta: number; reason: string }
+) {
+  const employee = await UserModel.findById(employeeId);
+  if (!employee) throw new ApiError(404, "Employee not found");
+  if (input.leaveType === LEAVE_TYPES.UNPAID) {
+    throw new ApiError(400, "Unpaid Leave has no balance to manage");
+  }
+
+  const period = input.period ?? ALLOCATION_PERIOD.ANNUAL;
+  if ((input.leaveType === LEAVE_TYPES.SICK || input.leaveType === LEAVE_TYPES.CASUAL_PAID) && period === ALLOCATION_PERIOD.ANNUAL) {
+    throw new ApiError(400, "Select H1 or H2 for this leave type");
+  }
+
+  if (input.delta > 0) {
+    return grantExtraLeave(actor, {
+      employeeId,
+      days: input.delta,
+      reason: input.reason,
+      leaveType: input.leaveType,
+      period,
+      year: input.year,
+    }, { skipMigrationCheck: true });
+  }
+
+  const amount = Math.abs(input.delta);
+  if (input.leaveType === LEAVE_TYPES.COMP_OFF) {
+    const current = await computeCompOffBalance(employeeId);
+    if (amount > current.remaining) {
+      throw new ApiError(409, "Cannot remove more Comp Off than the employee currently has remaining");
+    }
+    let remaining = amount;
+    const allocations = await LeaveAllocationModel.find({
+      employee: employeeId,
+      leaveType: LEAVE_TYPES.COMP_OFF,
+      days: { $gt: 0 },
+    }).sort({ createdAt: -1 });
+    for (const allocation of allocations) {
+      if (remaining <= 0) break;
+      const reduction = Math.min(allocation.days, remaining);
+      allocation.days -= reduction;
+      remaining -= reduction;
+      if (allocation.days < 0.5) await allocation.deleteOne();
+      else await allocation.save();
+    }
+    if (remaining > 0) throw new ApiError(409, "Cannot reduce Comp Off below its granted balance");
+    await recordBalanceAdjustment({
+      actor, employeeId, year: input.year, leaveType: input.leaveType, period: null,
+      field: "compOffGranted", previousValue: current.granted, newValue: current.granted - amount,
+      reason: input.reason, source: LEAVE_BALANCE_ADJUSTMENT_SOURCE.MANUAL_EDIT,
+    });
+    return { adjusted: true };
+  }
+
+  const balance = await LeaveBalanceModel.findOne({ employee: employeeId, year: input.year });
+  if (!balance) throw new ApiError(409, "This employee has no adjustable balance for the selected year");
+  const field = resolveExtraField(input.leaveType, period);
+  if (!field) throw new ApiError(400, "This leave type cannot be adjusted");
+  const previousValue = balance[field] || 0;
+  const newValue = previousValue - amount;
+  if (newValue < 0) throw new ApiError(409, "Cannot reduce below the manually granted balance");
+  balance[field] = newValue;
+  await balance.save();
+  await recordBalanceAdjustment({
+    actor, employeeId, year: input.year, leaveType: input.leaveType,
+    period: input.leaveType === LEAVE_TYPES.ANNUAL ? null : period,
+    field, previousValue, newValue, reason: input.reason,
+    source: LEAVE_BALANCE_ADJUSTMENT_SOURCE.MANUAL_EDIT,
+  });
+  return { adjusted: true };
 }
 
 export async function listLeaveAllocations(query?: { employeeId?: string; year?: number }) {

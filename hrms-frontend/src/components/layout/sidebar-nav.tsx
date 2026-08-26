@@ -13,12 +13,14 @@ import {
   FileSpreadsheet,
   History,
   ShieldCheck,
+  Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ROUTES } from "@/constants/routes";
 import { ROLES, Role } from "@/constants/roles";
 import { useAuth } from "@/hooks/use-auth";
 import { useAdobeLicenseAccess } from "@/hooks/use-adobe-license-access";
+import { useItWorkManagementAccess } from "@/hooks/use-it-work-management-access";
 
 const navItems = [
   { label: "Dashboard", href: ROUTES.DASHBOARD, icon: LayoutDashboard },
@@ -55,12 +57,18 @@ const navItems = [
     href: ROUTES.ADMINISTRATION_ADOBE_LICENSES,
     icon: FileSpreadsheet,
   },
+  {
+    label: "IT Work Management",
+    href: ROUTES.IT_WORK_MANAGEMENT,
+    icon: Wrench,
+  },
 ];
 
 export function SidebarNav() {
   const pathname = usePathname();
   const { user } = useAuth();
   const { canAccess: canAccessAdobeLicenses } = useAdobeLicenseAccess();
+  const { canAccess: canAccessItWorkManagement } = useItWorkManagementAccess();
   const isAdmin = !!user && (user.role === ROLES.ADMIN || user.role === ROLES.SUPER_ADMIN);
 
   const visibleItems = navItems.filter((item) => {
@@ -68,6 +76,11 @@ export function SidebarNav() {
     // navbar — only a granted non-admin employee gets a direct nav entry.
     if (item.href === ROUTES.ADMINISTRATION_ADOBE_LICENSES) {
       return !isAdmin && canAccessAdobeLicenses;
+    }
+    // Relationship-based (Admin/Super Admin, or the IT department's head) —
+    // not expressible via the plain `allow` role list.
+    if (item.href === ROUTES.IT_WORK_MANAGEMENT) {
+      return canAccessItWorkManagement;
     }
     return !item.allow || (user && item.allow.includes(user.role));
   });

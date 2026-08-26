@@ -62,6 +62,17 @@ export const grantExtraLeaveSchema = z.object({
   }),
 });
 
+export const adjustBalanceSchema = z.object({
+  params: z.object({ employeeId: objectId }),
+  body: z.object({
+    leaveType: z.enum(Object.values(LEAVE_TYPES) as [string, ...string[]]),
+    period: z.enum(["H1", "H2", "ANNUAL"]).optional(),
+    year: z.coerce.number().int().min(2000).max(2100),
+    delta: z.coerce.number().refine((value) => value !== 0, "Change must not be zero"),
+    reason: z.string().trim().min(3, "Reason required"),
+  }),
+});
+
 export const updateAllocationSchema = z.object({
   params: z.object({ id: objectId }),
   body: z.object({

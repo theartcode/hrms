@@ -46,10 +46,25 @@ export interface ILeavePolicy {
   // total, so it's always correct even if past requests are edited later.
   annualAccrualPerMonth: number;
   annualNoticeDays: number;
+  leaveTypeSettings?: ILeaveTypeSettings;
   unpaidAllowed: boolean;
   carryForwardEnabled: boolean;
   minDurationDays: number;
   maxDurationDays: number;
+}
+
+export interface ILeaveTypePolicy {
+  advanceNoticeDays: number;
+  minDurationDays: number;
+  maxDurationDays: number;
+}
+
+export interface ILeaveTypeSettings {
+  SICK?: ILeaveTypePolicy;
+  CASUAL_PAID?: ILeaveTypePolicy;
+  ANNUAL?: ILeaveTypePolicy;
+  UNPAID?: ILeaveTypePolicy;
+  COMP_OFF?: ILeaveTypePolicy;
 }
 
 export interface INotificationEventToggles {
@@ -160,6 +175,19 @@ const leavePolicySchema = new Schema<ILeavePolicy>(
     casualPaidNoticeDays: { type: Number, required: true, default: 4 },
     annualAccrualPerMonth: { type: Number, required: true, default: 1.25 },
     annualNoticeDays: { type: Number, required: true, default: 7 },
+    leaveTypeSettings: {
+      type: new Schema(
+        {
+          SICK: { type: new Schema({ advanceNoticeDays: Number, minDurationDays: Number, maxDurationDays: Number }, { _id: false }) },
+          CASUAL_PAID: { type: new Schema({ advanceNoticeDays: Number, minDurationDays: Number, maxDurationDays: Number }, { _id: false }) },
+          ANNUAL: { type: new Schema({ advanceNoticeDays: Number, minDurationDays: Number, maxDurationDays: Number }, { _id: false }) },
+          UNPAID: { type: new Schema({ advanceNoticeDays: Number, minDurationDays: Number, maxDurationDays: Number }, { _id: false }) },
+          COMP_OFF: { type: new Schema({ advanceNoticeDays: Number, minDurationDays: Number, maxDurationDays: Number }, { _id: false }) },
+        },
+        { _id: false }
+      ),
+      required: false,
+    },
     unpaidAllowed: { type: Boolean, required: true, default: true },
     carryForwardEnabled: { type: Boolean, required: true, default: true },
     minDurationDays: { type: Number, required: true, default: 1 },

@@ -75,6 +75,22 @@ export function getNotificationUrl(notification: Notification): string | null {
       return taskId ? `${ROUTES.TASKS_ADMIN}?taskId=${taskId}` : ROUTES.TASKS_ADMIN;
     }
 
+    case "IT_WORK_ITEM_ASSIGNED":
+    case "IT_WORK_ITEM_REASSIGNED":
+    case "IT_WORK_ITEM_SUBMITTED_FOR_REVIEW":
+    case "IT_WORK_ITEM_CHANGES_REQUESTED":
+    case "IT_WORK_ITEM_REVIEW_APPROVED":
+    case "IT_WORK_ITEM_BLOCKED":
+    case "IT_WORK_ITEM_UNBLOCKED":
+    case "IT_WORK_ITEM_COMMENTED":
+    case "IT_WORK_ITEM_PROPOSED":
+    case "IT_WORK_ITEM_PROPOSAL_APPROVED":
+    case "IT_WORK_ITEM_PROPOSAL_REJECTED":
+    case "IT_WORK_ITEM_PROPOSAL_CHANGES_REQUESTED": {
+      const workItemId = str(metadata, "workItemId");
+      return workItemId ? ROUTES.IT_WORK_MANAGEMENT_WORK_ITEM_DETAIL(workItemId) : null;
+    }
+
     case "HOLIDAY_ADDED":
       return ROUTES.ADMINISTRATION_HOLIDAYS;
 

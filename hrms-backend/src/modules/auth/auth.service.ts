@@ -155,6 +155,8 @@ export async function setPassword(
 
   user.passwordHash = await hashSecret(newPassword);
   user.mustChangePassword = false;
+  user.failedLoginAttempts = 0;
+  user.lockedUntil = null;
 
   const tokens = await issueTokens(user);
   return { tokens, user: toPublicUser(user) };
@@ -183,6 +185,8 @@ export async function adminResetPassword(
   const tempPassword = generateTempPassword();
   target.passwordHash = await hashSecret(tempPassword);
   target.mustChangePassword = true;
+  target.failedLoginAttempts = 0;
+  target.lockedUntil = null;
   target.refreshTokenHash = null;
   await target.save();
 
@@ -263,6 +267,8 @@ export async function resetPassword(token: string, newPassword: string): Promise
 
   user.passwordHash = await hashSecret(newPassword);
   user.mustChangePassword = false;
+  user.failedLoginAttempts = 0;
+  user.lockedUntil = null;
   user.refreshTokenHash = null;
   user.passwordResetTokenHash = null;
   user.passwordResetExpiresAt = null;

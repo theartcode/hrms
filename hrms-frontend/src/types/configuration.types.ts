@@ -23,8 +23,15 @@ export interface LeavePolicy {
   casualPaidNoticeDays: number;
   annualAccrualPerMonth: number;
   annualNoticeDays: number;
+  leaveTypeSettings?: Partial<Record<"SICK" | "CASUAL_PAID" | "ANNUAL" | "UNPAID" | "COMP_OFF", LeaveTypePolicy>>;
   unpaidAllowed: boolean;
   carryForwardEnabled: boolean;
+  minDurationDays: number;
+  maxDurationDays: number;
+}
+
+export interface LeaveTypePolicy {
+  advanceNoticeDays: number;
   minDurationDays: number;
   maxDurationDays: number;
 }

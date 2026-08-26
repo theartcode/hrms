@@ -47,6 +47,15 @@ export const updateLeavePolicySchema = z.object({
     casualPaidNoticeDays: z.coerce.number().int().min(0).max(365).optional(),
     annualAccrualPerMonth: z.coerce.number().min(0).max(31).optional(),
     annualNoticeDays: z.coerce.number().int().min(0).max(365).optional(),
+    leaveTypeSettings: z
+      .object({
+        SICK: z.object({ advanceNoticeDays: z.coerce.number().int().min(0).max(365), minDurationDays: z.coerce.number().int().min(1).max(365), maxDurationDays: z.coerce.number().int().min(1).max(365) }).optional(),
+        CASUAL_PAID: z.object({ advanceNoticeDays: z.coerce.number().int().min(0).max(365), minDurationDays: z.coerce.number().int().min(1).max(365), maxDurationDays: z.coerce.number().int().min(1).max(365) }).optional(),
+        ANNUAL: z.object({ advanceNoticeDays: z.coerce.number().int().min(0).max(365), minDurationDays: z.coerce.number().int().min(1).max(365), maxDurationDays: z.coerce.number().int().min(1).max(365) }).optional(),
+        UNPAID: z.object({ advanceNoticeDays: z.coerce.number().int().min(0).max(365), minDurationDays: z.coerce.number().int().min(1).max(365), maxDurationDays: z.coerce.number().int().min(1).max(365) }).optional(),
+        COMP_OFF: z.object({ advanceNoticeDays: z.coerce.number().int().min(0).max(365), minDurationDays: z.coerce.number().int().min(1).max(365), maxDurationDays: z.coerce.number().int().min(1).max(365) }).optional(),
+      })
+      .optional(),
     unpaidAllowed: z.coerce.boolean().optional(),
     carryForwardEnabled: z.coerce.boolean().optional(),
     minDurationDays: z.coerce.number().int().min(1).max(365).optional(),

@@ -20,6 +20,7 @@ import publicRoutes from "./public/public.routes";
 import documentRoutes from "./documents/document.routes";
 import taskRoutes from "./task/task.routes";
 import adobeLicenseRoutes from "./adobe-license/adobe-license.routes";
+import itWorkManagementRoutes from "./it-work-management/it-work-management.routes";
 
 const router = Router();
 
@@ -44,5 +45,6 @@ router.use("/configuration", configurationRoutes);
 router.use(documentRoutes);
 router.use(taskRoutes);
 router.use(adobeLicenseRoutes);
+router.use("/it-work-management", itWorkManagementRoutes);
 
 export default router;

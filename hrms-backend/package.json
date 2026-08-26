@@ -9,6 +9,8 @@
     "start": "node dist/server.js",
     "lint": "eslint src --ext .ts",
     "seed:super-admin": "ts-node --transpile-only src/scripts/seed-super-admin.ts",
+    "seed:it-work-management-sample-data": "ts-node --transpile-only src/scripts/seed-it-work-management-sample-data.ts",
+    "reset:it-work-management-sample-data": "ts-node --transpile-only src/scripts/reset-it-work-management-sample-data.ts",
     "backfill:leave-migration": "ts-node --transpile-only src/scripts/backfill-leave-migration-status.ts",
     "test": "vitest run",
     "test:watch": "vitest"
