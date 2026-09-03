@@ -22,9 +22,10 @@ export function startScheduledJobs(): void {
     });
   }, { timezone: "Asia/Kolkata" });
 
-  // Weekly, Friday afternoon — prompts the team to plan next week's 5
-  // working days before they leave for the weekend.
-  cron.schedule("30 15 * * 5", () => {
+  // Weekly, Saturday afternoon — the last working day of this company's
+  // Mon-Sat week, so it prompts the team to plan next week's 5 working
+  // days before their one day off (Sunday).
+  cron.schedule("30 15 * * 6", () => {
     runWorkScheduleReminderCheck().catch((err) => {
       logger.error({ err }, "Scheduled work schedule reminder failed");
     });

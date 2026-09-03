@@ -1,15 +1,14 @@
 import { HolidayModel } from "../../modules/holiday/holiday.model";
 import { getISTDateString, getISTDayOfWeek } from "./istDate";
 
-// The single place "non-working day" is defined — Sat/Sun today, but kept
-// as one small function rather than inlined everywhere so a future
-// variable work-week can change just this. Combined with active Holiday
-// records (below) rather than weekends alone, per the Work Schedule
-// brief's own instruction to keep this reusable instead of hardcoding
-// Mon-Fri throughout the app.
+// The single place "non-working day" is defined — this company runs a
+// Monday-Saturday work week, so Sunday (day 0) is the only weekly off day.
+// Kept as one small function rather than inlined everywhere so a future
+// change to the work week only touches this one place. Combined with
+// active Holiday records (below) rather than the weekly off day alone.
 function isWeekend(date: Date): boolean {
   const day = getISTDayOfWeek(date);
-  return day === 0 || day === 6;
+  return day === 0;
 }
 
 // Bounded lookahead so the Holiday query never has to be open-ended — at
@@ -32,7 +31,7 @@ async function getActiveHolidayDates(from: string, count: number): Promise<Set<s
 }
 
 /**
- * The next `count` working days (Mon-Fri, excluding active Holidays),
+ * The next `count` working days (Mon-Sat, excluding active Holidays),
  * starting from `from` (inclusive) — "today" counts as the first working
  * day when it qualifies, so a planning grid built the same morning still
  * includes today.
