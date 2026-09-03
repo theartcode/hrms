@@ -17,8 +17,10 @@ interface Actor {
 }
 
 // How many working days ahead the planning window covers — the one place
-// this is defined, so widening it later is a one-line change.
-const SCHEDULE_WINDOW_DAYS = 5;
+// this is defined, so widening it later is a one-line change. 6, not 5:
+// this company's work week is Monday-Saturday, so the window covers a full
+// week of working days.
+const SCHEDULE_WINDOW_DAYS = 6;
 
 const WORK_ITEM_POPULATE = { path: "workItem", select: "workItemId title status" };
 
@@ -56,7 +58,7 @@ async function assertCanManageScheduleFor(actor: Actor, targetEmployeeId: string
 async function assertValidWorkingDate(date: string): Promise<void> {
   const validDays = await getNextWorkingDays(SCHEDULE_WINDOW_DAYS);
   if (!validDays.includes(date)) {
-    throw new ApiError(422, "Date must be one of the next 5 working days");
+    throw new ApiError(422, "Date must be one of the next 6 working days");
   }
 }
 
@@ -89,7 +91,7 @@ export async function getEmployeeSchedule(targetEmployeeId: string) {
   return { days, entries: entries.map(toPublicEntry) };
 }
 
-// itManage-gated at the route — the whole IT team's next 5 working days in
+// itManage-gated at the route — the whole IT team's next 6 working days in
 // one grid. Every active team member appears even with zero entries, so an
 // unplanned employee is visible as an empty row rather than absent.
 export async function getTeamSchedule() {

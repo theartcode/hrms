@@ -61,7 +61,7 @@ const SELF_SERVICE_CATEGORIES = [
   },
   {
     title: "My Schedule",
-    description: "Plan your next 5 working days.",
+    description: "Plan your next 6 working days.",
     href: ROUTES.IT_WORK_MANAGEMENT_SCHEDULE,
     icon: CalendarDays,
   },
@@ -77,7 +77,7 @@ const MANAGE_SCHEDULE_CATEGORIES = [
   },
   {
     title: "Team Schedule",
-    description: "The whole team's next 5 working days, at a glance.",
+    description: "The whole team's next 6 working days, at a glance.",
     href: ROUTES.IT_WORK_MANAGEMENT_SCHEDULE_TEAM,
     icon: CalendarClock,
   },

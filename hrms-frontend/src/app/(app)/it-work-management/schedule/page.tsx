@@ -10,7 +10,7 @@ export default function ItWorkManagementSchedulePage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">My Schedule</h1>
           <p className="text-sm text-muted-foreground">
-            What you plan to work on over the next 5 working days.
+            What you plan to work on over the next 6 working days.
           </p>
         </div>
 

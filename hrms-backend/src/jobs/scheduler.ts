@@ -14,9 +14,9 @@ export function startScheduledJobs(): void {
     });
   }, { timezone: "Asia/Kolkata" });
 
-  // Daily, end-of-day — gives the day's work a chance to actually happen
-  // before nudging anyone who hasn't logged it yet.
-  cron.schedule("30 17 * * *", () => {
+  // Daily, 8:00 PM IST — this company's actual end-of-day submission
+  // deadline for the daily timesheet.
+  cron.schedule("0 20 * * *", () => {
     runDailyTimesheetReminderCheck().catch((err) => {
       logger.error({ err }, "Scheduled daily timesheet reminder failed");
     });

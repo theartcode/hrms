@@ -16,10 +16,10 @@ import { ItScheduleAddEntryDialog } from "./it-schedule-add-entry-dialog";
 const QUERY_KEY = ["work-schedule", "mine"];
 
 // A responsive card-per-day grid rather than a single wide table — reads
-// cleanly for one person's own 5-day plan on both desktop (5 across) and
-// mobile (stacked). The team-wide equivalent (ItScheduleTeamGrid) uses an
-// actual table instead, since a person-by-day matrix genuinely needs rows
-// and columns.
+// cleanly for one person's own 6-day plan (this company's Mon-Sat work
+// week) on both desktop (up to 6 across) and mobile (stacked). The
+// team-wide equivalent (ItScheduleTeamGrid) uses an actual table instead,
+// since a person-by-day matrix genuinely needs rows and columns.
 export function ItScheduleMyGrid() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -50,8 +50,8 @@ export function ItScheduleMyGrid() {
 
   if (isLoading || !user) {
     return (
-      <div className="grid gap-3 sm:grid-cols-5">
-        {Array.from({ length: 5 }).map((_, i) => (
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, i) => (
           <Skeleton key={i} className="h-40 w-full" />
         ))}
       </div>
@@ -62,7 +62,7 @@ export function ItScheduleMyGrid() {
 
   return (
     <>
-      <div className="grid gap-3 sm:grid-cols-5">
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
         {days.map((date) => {
           const entries = entriesByDate.get(date) ?? [];
           return (

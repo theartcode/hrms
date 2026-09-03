@@ -20,7 +20,7 @@ import { ItScheduleAddEntryDialog } from "./it-schedule-add-entry-dialog";
 
 const QUERY_KEY = ["work-schedule", "team"];
 
-// Rows = employees, columns = the next 5 working days — a genuine matrix,
+// Rows = employees, columns = the next 6 working days — a genuine matrix,
 // so an actual table (with horizontal scroll on narrow screens, same
 // convention as ItWorkItemTable/ItDashboardTeamWorkload) fits better here
 // than the card-per-day layout ItScheduleMyGrid uses for a single person.

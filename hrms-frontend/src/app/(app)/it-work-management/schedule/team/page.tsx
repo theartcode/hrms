@@ -10,7 +10,7 @@ export default function ItWorkManagementTeamSchedulePage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Team Schedule</h1>
           <p className="text-sm text-muted-foreground">
-            The whole team&apos;s next 5 working days, at a glance.
+            The whole team&apos;s next 6 working days, at a glance.
           </p>
         </div>
 

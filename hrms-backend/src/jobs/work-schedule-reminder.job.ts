@@ -41,7 +41,7 @@ export async function runWorkScheduleReminderCheck(): Promise<void> {
       await notifyUser({
         user: employeeId,
         type: NOTIFICATION_TYPES.WORK_SCHEDULE_REMINDER,
-        title: "Plan your next 5 working days",
+        title: "Plan your next 6 working days",
         message: "Update your work schedule with what you're planning to work on next.",
         metadata: {},
       });
