@@ -136,6 +136,60 @@ export interface ItWorkItemComment {
   updatedAt: string;
 }
 
+// Daily Timesheet — a lightweight daily work log, deliberately not an
+// hours-tracking system (no start/end time). "NOT_STARTED" is synthesized
+// by the backend when no row exists yet for the day; it's never a stored
+// status value.
+export type DailyTimesheetStatus = "NOT_STARTED" | "DRAFT" | "SUBMITTED";
+
+export interface DailyTimesheetWorkItemRef {
+  _id: string;
+  workItemId: string;
+  title: string;
+  status: ItWorkItemStatus;
+}
+
+export interface DailyTimesheetEmployeeRef {
+  _id: string;
+  fullName: string;
+  employeeId: string;
+}
+
+export interface DailyTimesheetEntry {
+  id: string | null;
+  employee: string | DailyTimesheetEmployeeRef;
+  workDate: string;
+  description: string;
+  workItems: DailyTimesheetWorkItemRef[];
+  status: DailyTimesheetStatus;
+  submittedAt: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface DailyTimesheetPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+// Work Schedule — "what I plan to work on" per upcoming working day,
+// distinct from a Work Item's own dueDate/startDate.
+export interface WorkScheduleEntry {
+  id: string;
+  date: string;
+  workItem: DailyTimesheetWorkItemRef;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkScheduleTeamRow {
+  employee: DailyTimesheetEmployeeRef;
+  entries: WorkScheduleEntry[];
+}
+
 export interface ItWorkItemAttachment {
   _id: string;
   workItem: string;

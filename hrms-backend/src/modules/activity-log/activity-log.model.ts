@@ -25,7 +25,9 @@ export interface IActivityLog extends Document {
     | "ITProduct"
     | "ITProject"
     | "ITWorkItem"
-    | "ITWorkManagementSettings";
+    | "ITWorkManagementSettings"
+    | "DailyTimesheet"
+    | "WorkSchedule";
   targetId: Types.ObjectId;
   metadata?: Record<string, unknown>;
   createdAt: Date;
@@ -59,6 +61,8 @@ const activityLogSchema = new Schema<IActivityLog>(
         "ITProject",
         "ITWorkItem",
         "ITWorkManagementSettings",
+        "DailyTimesheet",
+        "WorkSchedule",
       ],
       required: true,
     },

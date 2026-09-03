@@ -7,6 +7,8 @@ import itProductRoutes from "./it-product.routes";
 import itProjectRoutes from "./it-project.routes";
 import itWorkItemRoutes from "./it-work-item.routes";
 import itWorkManagementSettingsRoutes from "./it-work-management-settings.routes";
+import dailyTimesheetRoutes from "./daily-timesheet.routes";
+import workScheduleRoutes from "./work-schedule.routes";
 import { getDashboard } from "./it-work-item-dashboard.controller";
 import { getDashboardSchema } from "./it-work-item-dashboard.validation";
 import { getMyDashboardHandler } from "./it-work-item-my-dashboard.controller";
@@ -50,6 +52,10 @@ router.use("/products", itProductRoutes);
 router.use("/projects", itProjectRoutes);
 router.use("/work-items", itWorkItemRoutes);
 router.use("/settings", itWorkManagementSettingsRoutes);
+// Daily Timesheet + Work Schedule — additive sibling feature areas, same
+// nested-sub-router shape as Products/Projects/Work Items above.
+router.use("/timesheets", dailyTimesheetRoutes);
+router.use("/schedules", workScheduleRoutes);
 // Later phases mount /activity, /reports here.
 
 export default router;

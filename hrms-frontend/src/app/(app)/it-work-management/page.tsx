@@ -1,7 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Boxes, FolderKanban, ListChecks, ShieldCheck } from "lucide-react";
+import {
+  Boxes,
+  CalendarClock,
+  CalendarDays,
+  ClipboardCheck,
+  FolderKanban,
+  ListChecks,
+  ShieldCheck,
+  Users,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ItWorkManagementGuard } from "@/features/it-work-management/components/it-work-management-guard";
@@ -35,6 +44,42 @@ const CATEGORIES = [
     description: "Day-to-day IT work — created, assigned, and tracked.",
     href: ROUTES.IT_WORK_MANAGEMENT_WORK_ITEMS,
     icon: ListChecks,
+  },
+];
+
+// Self-service — visible to anyone with IT access (manage or team tier),
+// since either might want to log their own daily work or plan their own
+// upcoming days. Kept separate from CATEGORIES above so the team-member
+// branch below can show just these two without the catalog-browsing tiles
+// (Products/Projects/Work Items) that branch deliberately drops.
+const SELF_SERVICE_CATEGORIES = [
+  {
+    title: "Daily Timesheet",
+    description: "Log what you worked on today.",
+    href: ROUTES.IT_WORK_MANAGEMENT_TIMESHEET,
+    icon: ClipboardCheck,
+  },
+  {
+    title: "My Schedule",
+    description: "Plan your next 5 working days.",
+    href: ROUTES.IT_WORK_MANAGEMENT_SCHEDULE,
+    icon: CalendarDays,
+  },
+];
+
+// Manage-tier only (Admin/Super Admin/IT Head) — the team-wide views.
+const MANAGE_SCHEDULE_CATEGORIES = [
+  {
+    title: "Team Timesheet",
+    description: "Who has submitted today's work log, and who hasn't.",
+    href: ROUTES.IT_WORK_MANAGEMENT_TIMESHEET_TEAM,
+    icon: Users,
+  },
+  {
+    title: "Team Schedule",
+    description: "The whole team's next 5 working days, at a glance.",
+    href: ROUTES.IT_WORK_MANAGEMENT_SCHEDULE_TEAM,
+    icon: CalendarClock,
   },
 ];
 
@@ -89,21 +134,32 @@ export default function ItWorkManagementPage() {
         {!isLoading && canManage && (
           <>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {CATEGORIES.map((category) => (
-                <SettingsCard key={category.href} {...category} />
-              ))}
+              {[...CATEGORIES, ...SELF_SERVICE_CATEGORIES, ...MANAGE_SCHEDULE_CATEGORIES].map(
+                (category) => (
+                  <SettingsCard key={category.href} {...category} />
+                )
+              )}
             </div>
             <ItHeadDashboard />
           </>
         )}
 
-        {!isLoading && !canManage && isTeamMember && <ItTeamDashboard />}
+        {!isLoading && !canManage && isTeamMember && (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {SELF_SERVICE_CATEGORIES.map((category) => (
+                <SettingsCard key={category.href} {...category} />
+              ))}
+            </div>
+            <ItTeamDashboard />
+          </>
+        )}
 
         {!isLoading && !canManage && !isTeamMember && isReadOnlyViewer && <ItExecutiveDashboard />}
 
         {!isLoading && !canManage && !isTeamMember && !isReadOnlyViewer && (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {CATEGORIES.map((category) => (
+            {[...CATEGORIES, ...SELF_SERVICE_CATEGORIES].map((category) => (
               <SettingsCard key={category.href} {...category} />
             ))}
           </div>

@@ -213,6 +213,21 @@ export const API_ENDPOINTS = {
       ATTACHMENT_DELETE: (id: string, attachmentId: string) =>
         `/it-work-management/work-items/${id}/attachments/${attachmentId}`,
     },
+    TIMESHEETS: {
+      TODAY: "/it-work-management/timesheets/me/today",
+      SUBMIT_TODAY: "/it-work-management/timesheets/me/today/submit",
+      MY_HISTORY: "/it-work-management/timesheets/me/history",
+      TEAM: "/it-work-management/timesheets/team",
+      DETAIL: (id: string) => `/it-work-management/timesheets/${id}`,
+    },
+    SCHEDULES: {
+      MINE: "/it-work-management/schedules/me",
+      MINE_DETAIL: (id: string) => `/it-work-management/schedules/me/${id}`,
+      TEAM: "/it-work-management/schedules/team",
+      EMPLOYEE: (employeeId: string) => `/it-work-management/schedules/employee/${employeeId}`,
+      EMPLOYEE_DETAIL: (employeeId: string, id: string) =>
+        `/it-work-management/schedules/employee/${employeeId}/${id}`,
+    },
   },
   ADOBE_LICENSES: {
     GET: "/adobe-licenses",

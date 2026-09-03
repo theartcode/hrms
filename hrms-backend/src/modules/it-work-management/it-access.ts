@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import { ApiError } from "../../shared/errors/ApiError";
 import { ROLES, Role } from "../../shared/constants/roles";
+import { LOGIN_ALLOWED_STATUSES } from "../../shared/constants/employeeStatus";
 import { getDepartmentsHeadedBy } from "../department/department.cache";
 import { DepartmentModel } from "../department/department.model";
 import { UserModel } from "../user/user.model";
@@ -55,6 +56,28 @@ export async function isItDepartmentMember(employeeId: string): Promise<boolean>
 export async function isItTeamMember(employeeId: string): Promise<boolean> {
   if (isItHead(employeeId)) return false;
   return isItDepartmentMember(employeeId);
+}
+
+// Daily Timesheet / Work Schedule: both features are scoped to exactly the
+// "team" tier (active IT department members, excluding the head) — the
+// same population isItTeamMember checks one id at a time, listed in bulk
+// for the reminder jobs and the manager's team-wide views. Deliberately
+// excludes the IT Head (matches isItTeamMember) and anyone outside
+// LOGIN_ALLOWED_STATUSES (a deactivated/resigned employee has nothing to
+// remind or display).
+export async function listActiveItTeamMemberIds(): Promise<string[]> {
+  const itDepartment = await DepartmentModel.findOne({
+    name: new RegExp(`^${IT_DEPARTMENT_NAME}$`, "i"),
+  }).select("_id headEmployeeId");
+  if (!itDepartment) return [];
+
+  const headId = itDepartment.headEmployeeId ? String(itDepartment.headEmployeeId) : null;
+  const members = await UserModel.find({
+    department: itDepartment._id,
+    status: { $in: LOGIN_ALLOWED_STATUSES },
+  }).select("_id");
+
+  return members.map((m) => String(m._id)).filter((id) => id !== headId);
 }
 
 // Phase 1C-C adds "readonly" — the CEO tier. Deliberately a fourth,

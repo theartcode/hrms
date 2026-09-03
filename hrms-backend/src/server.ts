@@ -6,6 +6,8 @@ import { loadConfigCache } from "./modules/configuration/configuration.cache";
 import { loadDepartmentHeadsCache } from "./modules/department/department.cache";
 import { startScheduledJobs } from "./jobs/scheduler";
 import { runProbationEndingCheck } from "./jobs/probation-ending.job";
+import { runDailyTimesheetReminderCheck } from "./jobs/daily-timesheet-reminder.job";
+import { runWorkScheduleReminderCheck } from "./jobs/work-schedule-reminder.job";
 
 async function bootstrap(): Promise<void> {
   await connectDB();
@@ -24,6 +26,12 @@ async function bootstrap(): Promise<void> {
   // next scheduled tick.
   runProbationEndingCheck().catch((err) => {
     logger.error({ err }, "Startup probation-ending check failed");
+  });
+  runDailyTimesheetReminderCheck().catch((err) => {
+    logger.error({ err }, "Startup daily timesheet reminder check failed");
+  });
+  runWorkScheduleReminderCheck().catch((err) => {
+    logger.error({ err }, "Startup work schedule reminder check failed");
   });
 }
 
