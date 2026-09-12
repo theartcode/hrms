@@ -1,6 +1,20 @@
 import { getAccessToken, setAccessToken } from "./token-store";
 import { API_ENDPOINTS } from "@/constants/api-endpoints";
 
+// Thrown instead of a plain Error so callers (React Query's retry/retryDelay
+// in particular) can tell a 429 apart from a regular failure and back off
+// using the server's own Retry-After hint instead of guessing.
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly retryAfterSeconds: number | null = null
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5000";
 const API_VERSION = "/api/v1";
@@ -69,9 +83,22 @@ export async function apiFetch<T>(
 
   if (!res.ok) {
     const body = await res.json().catch(() => null);
-    throw new Error(
-      body?.message ?? `API request failed: ${res.status} ${res.statusText}`
-    );
+    const message =
+      body?.message ?? `API request failed: ${res.status} ${res.statusText}`;
+
+    if (res.status === 429) {
+      const retryAfterHeader = res.headers.get("Retry-After");
+      const retryAfterSeconds = retryAfterHeader
+        ? Number(retryAfterHeader)
+        : null;
+      throw new ApiError(
+        message,
+        429,
+        Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : null
+      );
+    }
+
+    throw new ApiError(message, res.status);
   }
 
   return res.json() as Promise<T>;
