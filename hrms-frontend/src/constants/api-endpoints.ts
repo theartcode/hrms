@@ -50,6 +50,7 @@ export const API_ENDPOINTS = {
     CHECK_IN: "/attendance/check-in",
     CHECK_OUT: "/attendance/check-out",
     TODAY: "/attendance/today",
+    OFFICE_HOURS: "/attendance/office-hours",
     HISTORY: "/attendance/history",
     HISTORY_EXPORT: "/attendance/history/export",
     CALENDAR: "/attendance/calendar",

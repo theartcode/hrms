@@ -7,6 +7,7 @@ import { Check, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -34,6 +35,7 @@ export function AdminCorrectionsPanel({ highlightId }: AdminCorrectionsPanelProp
     action: "approve" | "reject";
   } | null>(null);
   const [comment, setComment] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const highlightedRowRef = useRef<HTMLDivElement | null>(null);
 
   const { data, isLoading } = useQuery({
@@ -67,10 +69,62 @@ export function AdminCorrectionsPanel({ highlightId }: AdminCorrectionsPanelProp
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const bulkApproveMutation = useMutation({
+    mutationFn: async (ids: string[]) =>
+      Promise.allSettled(ids.map((id) => correctionService.approveCorrection(id))),
+    onSuccess: (results, ids) => {
+      const succeeded = results.filter((r) => r.status === "fulfilled").length;
+      const failed = results.length - succeeded;
+      queryClient.invalidateQueries({ queryKey: ["admin-corrections"] });
+      queryClient.invalidateQueries({ queryKey: ["attendance-admin"] });
+      setSelected((prev) => {
+        const next = new Set(prev);
+        for (const id of ids) next.delete(id);
+        return next;
+      });
+      if (failed === 0) {
+        toast.success(succeeded === 1 ? "Correction approved" : `${succeeded} corrections approved`);
+      } else {
+        toast.error(`${succeeded} approved, ${failed} failed — refresh and try again`);
+      }
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const allIds = data?.map((c) => c.id) ?? [];
+  const allSelected = allIds.length > 0 && allIds.every((id) => selected.has(id));
+
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(allIds));
+
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
         <CardTitle>Pending Correction Requests</CardTitle>
+        {!isLoading && data && data.length > 0 && (
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
+              Select all ({data.length})
+            </label>
+            <Button
+              size="sm"
+              disabled={selected.size === 0 || bulkApproveMutation.isPending}
+              onClick={() => bulkApproveMutation.mutate(Array.from(selected))}
+            >
+              {bulkApproveMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Approve Selected ({selected.size})
+            </Button>
+          </div>
+        )}
       </CardHeader>
       <CardContent>
         {isLoading && <Skeleton className="h-24 w-full" />}
@@ -95,18 +149,25 @@ export function AdminCorrectionsPanel({ highlightId }: AdminCorrectionsPanelProp
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium">
-                        {employee.fullName}{" "}
-                        <span className="text-muted-foreground">({employee.employeeId})</span>
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {formatISTDate(c.date)} — {c.reason}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Requested: {formatISTTime(c.requestedCheckIn)} →{" "}
-                        {formatISTTime(c.requestedCheckOut)}
-                      </p>
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        className="mt-1"
+                        checked={selected.has(c.id)}
+                        onCheckedChange={() => toggleOne(c.id)}
+                      />
+                      <div>
+                        <p className="text-sm font-medium">
+                          {employee.fullName}{" "}
+                          <span className="text-muted-foreground">({employee.employeeId})</span>
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {formatISTDate(c.date)} — {c.reason}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Requested: {formatISTTime(c.requestedCheckIn)} →{" "}
+                          {formatISTTime(c.requestedCheckOut)}
+                        </p>
+                      </div>
                     </div>
                     <div className="flex shrink-0 gap-2">
                       <Button

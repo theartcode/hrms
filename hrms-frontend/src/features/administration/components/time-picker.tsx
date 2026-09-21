@@ -1,4 +1,4 @@
-import { Input } from "@/components/ui/input";
+import { ClockTimePicker } from "@/components/ui/clock-time-picker";
 import { Label } from "@/components/ui/label";
 
 export function TimePicker({
@@ -15,7 +15,7 @@ export function TimePicker({
   return (
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={id}>{label}</Label>
-      <Input id={id} type="time" value={value} onChange={(e) => onChange(e.target.value)} />
+      <ClockTimePicker id={id} value={value} onChange={onChange} />
     </div>
   );
 }

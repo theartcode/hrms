@@ -10,7 +10,7 @@ import { recordActivity } from "../activity-log/activity-log.service";
 import { HolidayModel } from "../holiday/holiday.model";
 import { UserModel } from "../user/user.model";
 import { LOGIN_ALLOWED_STATUSES } from "../../shared/constants/employeeStatus";
-import { isConfiguredWeekend } from "../configuration/configuration.cache";
+import { isConfiguredWeekend, getOfficeSettings } from "../configuration/configuration.cache";
 import { resolveViewableEmployeeId as resolveViewableEmployeeIdShared } from "../../shared/utils/resolveViewableEmployeeId";
 import { AttendanceModel, IAttendance } from "./attendance.model";
 import { computeAttendanceStatus, deriveDisplayStatus } from "./attendance.util";
@@ -144,6 +144,12 @@ export async function getToday(employeeId: string): Promise<PublicAttendanceReco
   const todayStr = getISTDateString(new Date());
   const record = await AttendanceModel.findOne({ employee: employeeId, date: todayStr });
   return record ? toPublicRecord(record, todayStr) : null;
+}
+
+/** Configured office hours, safe for any authenticated employee (not just admins) to read. */
+export function getOfficeHours(): { startTime: string; endTime: string; gracePeriodMinutes: number } {
+  const { startTime, endTime, gracePeriodMinutes } = getOfficeSettings();
+  return { startTime, endTime, gracePeriodMinutes };
 }
 
 export interface DayStatusEntry {

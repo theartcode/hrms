@@ -17,6 +17,10 @@ async function today(req: Request, res: Response): Promise<void> {
   sendSuccess(res, { attendance: record });
 }
 
+async function officeHours(_req: Request, res: Response): Promise<void> {
+  sendSuccess(res, attendanceService.getOfficeHours());
+}
+
 function currentYearMonth() {
   const now = new Date();
   return { year: now.getFullYear(), month: now.getMonth() + 1 };
@@ -112,6 +116,7 @@ export {
   doCheckIn,
   doCheckOut,
   today,
+  officeHours,
   history,
   exportHistory,
   calendar,

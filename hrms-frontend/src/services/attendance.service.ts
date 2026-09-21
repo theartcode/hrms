@@ -6,6 +6,7 @@ import {
   DayStatusEntry,
   MonthSummary,
   NotCheckedInEmployee,
+  OfficeHours,
   PaginationInfo,
 } from "@/types/attendance.types";
 
@@ -38,6 +39,10 @@ export function getToday() {
   return apiFetch<ApiSuccess<{ attendance: AttendanceRecord | null }>>(
     API_ENDPOINTS.ATTENDANCE.TODAY
   );
+}
+
+export function getOfficeHours() {
+  return apiFetch<ApiSuccess<OfficeHours>>(API_ENDPOINTS.ATTENDANCE.OFFICE_HOURS);
 }
 
 export interface MonthParams {

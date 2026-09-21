@@ -9,6 +9,12 @@ export interface AttendanceRecord {
   status: AttendanceStatus | null;
 }
 
+export interface OfficeHours {
+  startTime: string;
+  endTime: string;
+  gracePeriodMinutes: number;
+}
+
 export interface DayStatusEntry {
   date: string;
   checkIn: string | null;

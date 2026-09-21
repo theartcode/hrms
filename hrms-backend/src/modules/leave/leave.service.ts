@@ -678,7 +678,6 @@ export async function approveLeave(actor: Actor, leaveId: string, comment?: stri
 
       const year = Number(leave.startDate.slice(0, 4));
       const policy = getLeavePolicy();
-      validateAdvanceNotice(leave.leaveType, leave.startDate, policy);
 
       let balance = await LeaveBalanceModel.findOne({
         employee: leave.employee,

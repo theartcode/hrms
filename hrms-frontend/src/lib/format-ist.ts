@@ -29,6 +29,14 @@ export function formatISTDate(dateStr: string): string {
   });
 }
 
+/** "14:05" -> "2:05 PM". For plain 24-hour "HH:MM" settings values (office hours), not ISO timestamps. */
+export function formatHHMMTo12Hour(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  const meridiem = h >= 12 ? "PM" : "AM";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${String(m).padStart(2, "0")} ${meridiem}`;
+}
+
 export function formatWorkedHours(hours: number | null): string {
   if (hours === null || hours === undefined) return "—";
   const h = Math.floor(hours);

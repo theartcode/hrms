@@ -19,6 +19,7 @@ router.use(authenticate);
 router.post("/check-in", attendanceController.doCheckIn);
 router.post("/check-out", attendanceController.doCheckOut);
 router.get("/today", attendanceController.today);
+router.get("/office-hours", attendanceController.officeHours);
 
 router.get("/history", validate(monthQuerySchema), attendanceController.history);
 router.get(

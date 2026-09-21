@@ -24,7 +24,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     user?.mustChangePassword
   ) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center" suppressHydrationWarning>
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );

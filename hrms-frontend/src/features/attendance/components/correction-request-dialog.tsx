@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import {
@@ -16,11 +16,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { ClockTimePicker } from "@/components/ui/clock-time-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import * as correctionService from "@/services/attendance-correction.service";
+import * as attendanceService from "@/services/attendance.service";
 import { formatISTDate } from "@/lib/format-ist";
 
 const timeRegex = /^\d{2}:\d{2}$/;
@@ -47,8 +48,15 @@ export function CorrectionRequestDialog({ date, onClose }: CorrectionRequestDial
   const queryClient = useQueryClient();
   const [serverError, setServerError] = useState<string | null>(null);
 
+  const { data: officeHours } = useQuery({
+    queryKey: ["office-hours"],
+    queryFn: () => attendanceService.getOfficeHours().then((res) => res.data),
+    staleTime: 5 * 60 * 1000,
+  });
+
   const {
     register,
+    control,
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
@@ -105,11 +113,19 @@ export function CorrectionRequestDialog({ date, onClose }: CorrectionRequestDial
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="checkInTime">Requested Check In</Label>
-              <Input
-                id="checkInTime"
-                type="time"
-                disabled={isSubmitting}
-                {...register("checkInTime")}
+              <Controller
+                control={control}
+                name="checkInTime"
+                render={({ field }) => (
+                  <ClockTimePicker
+                    id="checkInTime"
+                    value={field.value ?? ""}
+                    onChange={field.onChange}
+                    disabled={isSubmitting}
+                    defaultValue={officeHours?.startTime}
+                    defaultMeridiem="AM"
+                  />
+                )}
               />
               {errors.checkInTime && (
                 <p className="text-sm text-destructive">{errors.checkInTime.message}</p>
@@ -117,11 +133,19 @@ export function CorrectionRequestDialog({ date, onClose }: CorrectionRequestDial
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="checkOutTime">Requested Check Out</Label>
-              <Input
-                id="checkOutTime"
-                type="time"
-                disabled={isSubmitting}
-                {...register("checkOutTime")}
+              <Controller
+                control={control}
+                name="checkOutTime"
+                render={({ field }) => (
+                  <ClockTimePicker
+                    id="checkOutTime"
+                    value={field.value ?? ""}
+                    onChange={field.onChange}
+                    disabled={isSubmitting}
+                    defaultValue={officeHours?.endTime}
+                    defaultMeridiem="PM"
+                  />
+                )}
               />
             </div>
           </div>
