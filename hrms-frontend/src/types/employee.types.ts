@@ -24,6 +24,13 @@ export interface AssignableEmployee {
   department: { _id: string; name: string } | null;
 }
 
+export interface UpcomingAnniversary {
+  employeeId: string;
+  fullName: string;
+  date: string;
+  years: number;
+}
+
 // The minimal shape the `manager` populate() selects — not a full Employee.
 // Uses `_id` (not `id`), same as `department`/`designation`, since this is
 // the raw populated Mongoose subdocument, not run through toId().

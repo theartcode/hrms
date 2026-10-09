@@ -21,6 +21,8 @@ export interface DayStatusEntry {
   checkOut: string | null;
   workedHours: number | null;
   status: AttendanceStatus | null;
+  // Set only when status is HOLIDAY — which named holiday it is.
+  holidayName?: string | null;
 }
 
 export interface MonthSummary {

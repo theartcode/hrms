@@ -7,6 +7,17 @@ async function apply(req: Request, res: Response): Promise<void> {
   sendSuccess(res, { leave }, "Leave request submitted", 201);
 }
 
+async function markDay(req: Request, res: Response): Promise<void> {
+  const { employeeId, date, leaveType, reason } = req.body as {
+    employeeId: string;
+    date: string;
+    leaveType: Parameters<typeof leaveService.adminMarkDayAsLeave>[3];
+    reason?: string;
+  };
+  const leave = await leaveService.adminMarkDayAsLeave(req.user!, employeeId, date, leaveType, reason);
+  sendSuccess(res, { leave }, "Day marked as leave", 201);
+}
+
 async function mine(req: Request, res: Response): Promise<void> {
   const query = req.validated!.query as Parameters<typeof leaveService.listMyLeaves>[1];
   const result = await leaveService.listMyLeaves(req.user!.id, query);
@@ -54,7 +65,12 @@ async function reject(req: Request, res: Response): Promise<void> {
 }
 
 async function grantExtra(req: Request, res: Response): Promise<void> {
-  const allocation = await leaveService.grantExtraLeave(req.user!, req.body);
+  // Same skip as adjustLeaveBalance's Add path — manually granting extra
+  // leave shouldn't be gated behind migration confirmation, which every
+  // new hire starts without until an admin explicitly confirms it.
+  const allocation = await leaveService.grantExtraLeave(req.user!, req.body, {
+    skipMigrationCheck: true,
+  });
   sendSuccess(res, { allocation }, "Extra leave granted successfully", 201);
 }
 
@@ -135,6 +151,7 @@ async function reopenMigration(req: Request, res: Response): Promise<void> {
 
 export {
   apply,
+  markDay,
   mine,
   adminList,
   balance,

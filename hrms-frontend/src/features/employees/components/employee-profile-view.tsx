@@ -25,7 +25,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Employee } from "@/types/employee.types";
+import { DayStatusEntry } from "@/types/attendance.types";
 import { EmployeeStatusBadge } from "./employee-status-badge";
+import { AdminEditAttendanceDialog } from "./admin-edit-attendance-dialog";
 import { AttendanceStatusBadge } from "@/features/attendance/components/attendance-status-badge";
 import * as attendanceService from "@/services/attendance.service";
 import * as employeeService from "@/services/employee.service";
@@ -103,6 +105,7 @@ export function EmployeeProfileView({
   const [activeTab, setActiveTab] = useState<"overview" | "attendance" | "documents">(initialTab);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [editAttendanceDay, setEditAttendanceDay] = useState<DayStatusEntry | null>(null);
 
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
@@ -577,13 +580,14 @@ export function EmployeeProfileView({
                     <TableHead>Check Out</TableHead>
                     <TableHead>Worked Hours</TableHead>
                     <TableHead>Status</TableHead>
+                    {isAdminViewingOther && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoadingAttendance &&
                     Array.from({ length: 6 }).map((_, i) => (
                       <TableRow key={`skeleton-${i}`}>
-                        <TableCell colSpan={5}>
+                        <TableCell colSpan={isAdminViewingOther ? 6 : 5}>
                           <Skeleton className="h-5 w-full" />
                         </TableCell>
                       </TableRow>
@@ -591,7 +595,7 @@ export function EmployeeProfileView({
 
                   {!isLoadingAttendance && isAttendanceError && (
                     <TableRow>
-                      <TableCell colSpan={5} className="h-24 text-center">
+                      <TableCell colSpan={isAdminViewingOther ? 6 : 5} className="h-24 text-center">
                         <p className="text-sm text-destructive">Couldn&apos;t load daily attendance.</p>
                       </TableCell>
                     </TableRow>
@@ -606,8 +610,26 @@ export function EmployeeProfileView({
                         <TableCell>{formatISTTime(day.checkOut)}</TableCell>
                         <TableCell>{formatWorkedHours(day.workedHours)}</TableCell>
                         <TableCell>
-                          <AttendanceStatusBadge status={day.status} />
+                          <div className="flex items-center gap-2">
+                            <AttendanceStatusBadge status={day.status} />
+                            {day.status === "HOLIDAY" && day.holidayName && (
+                              <span className="text-xs text-muted-foreground">
+                                {day.holidayName}
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
+                        {isAdminViewingOther && (
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setEditAttendanceDay(day)}
+                            >
+                              Edit
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                 </TableBody>
@@ -618,6 +640,14 @@ export function EmployeeProfileView({
       )}
 
       {activeTab === "documents" && <DocumentsPanel employeeId={employee.id} />}
+
+      {isAdminViewingOther && (
+        <AdminEditAttendanceDialog
+          employeeId={employee.id}
+          day={editAttendanceDay}
+          onClose={() => setEditAttendanceDay(null)}
+        />
+      )}
     </div>
   );
 }

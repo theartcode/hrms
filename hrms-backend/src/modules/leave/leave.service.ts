@@ -18,6 +18,7 @@ import { resolveViewableEmployeeId } from "../../shared/utils/resolveViewableEmp
 import { recordActivity } from "../activity-log/activity-log.service";
 import { notifyAdmins, notifyUser } from "../notifications/notifications.service";
 import { UserModel } from "../user/user.model";
+import { AttendanceModel } from "../attendance/attendance.model";
 import { ILeaveBalance, LeaveBalanceModel } from "./leave-balance.model";
 import { ILeaveRequest, LeaveRequestModel } from "./leave-request.model";
 import { LeaveAllocationModel, ALLOCATION_PERIOD, AllocationPeriod } from "./leave-allocation.model";
@@ -71,6 +72,7 @@ function toPublicLeave(leave: ILeaveRequest) {
     startDate: leave.startDate,
     endDate: leave.endDate,
     days: leave.days,
+    isHalfDay: leave.isHalfDay,
     reason: leave.reason,
     status: leave.status,
     reviewedBy: leave.reviewedBy,
@@ -167,6 +169,7 @@ function computeHalfYearBuckets(
       pending: pendingH1,
       total: h1Total,
       baseTotal: firstHalfEligible ? quotaPerHalf : 0,
+      carriedForward: 0,
       extra: extraH1,
       remaining: h1Remaining,
     },
@@ -174,7 +177,8 @@ function computeHalfYearBuckets(
       used: usedH2,
       pending: pendingH2,
       total: h2Total,
-      baseTotal: secondHalfEligible ? quotaPerHalf + carryOver : 0,
+      baseTotal: secondHalfEligible ? quotaPerHalf : 0,
+      carriedForward: carryOver,
       extra: extraH2,
       remaining: h2Remaining,
     },
@@ -339,6 +343,10 @@ export async function getLeaveBalance(employeeId: string, year: number) {
     // instead of only rejecting it at submit time — see apply-leave-dialog.tsx
     // and leave-balance-card.tsx.
     employmentType: employee.employmentType,
+    // Once H1 has ended, any of its unused days are already folded into
+    // half2's total (see carryOver above) — the frontend uses this to stop
+    // treating half1.remaining as separately usable/addable once true.
+    firstHalfOver,
     sick: computeHalfYearBuckets(
       policy.sickQuotaPerHalf,
       balance.sickExtraH1 || 0,
@@ -347,7 +355,7 @@ export async function getLeaveBalance(employeeId: string, year: number) {
       balance.sickUsedH2,
       pendingSickH1,
       pendingSickH2,
-      policy.carryForwardEnabled,
+      getLeaveTypePolicy(LEAVE_TYPES.SICK, policy).carryForwardEnabled ?? policy.carryForwardEnabled,
       firstHalfOver,
       firstHalfEligible,
       secondHalfEligible
@@ -360,7 +368,8 @@ export async function getLeaveBalance(employeeId: string, year: number) {
       balance.casualPaidUsedH2,
       pendingCasualH1,
       pendingCasualH2,
-      policy.carryForwardEnabled,
+      getLeaveTypePolicy(LEAVE_TYPES.CASUAL_PAID, policy).carryForwardEnabled ??
+        policy.carryForwardEnabled,
       firstHalfOver,
       firstHalfEligible,
       secondHalfEligible
@@ -389,6 +398,7 @@ interface ApplyLeaveInput {
   leaveType: LeaveType;
   startDate: string;
   endDate: string;
+  isHalfDay?: boolean;
   reason: string;
 }
 
@@ -405,6 +415,7 @@ function getLeaveTypePolicy(leaveType: LeaveType, policy: ReturnType<typeof getL
           : 0,
     minDurationDays: policy.minDurationDays,
     maxDurationDays: policy.maxDurationDays,
+    includeWeekends: false,
   };
 }
 
@@ -420,6 +431,9 @@ function validateAdvanceNotice(leaveType: LeaveType, startDate: string, policy: 
 export async function applyLeave(actor: Actor, input: ApplyLeaveInput) {
   if (input.startDate > input.endDate) {
     throw new ApiError(400, "Start date must be before or equal to the end date");
+  }
+  if (input.isHalfDay && input.startDate !== input.endDate) {
+    throw new ApiError(400, "A half-day leave request can only be for a single date");
   }
 
   const employee = await UserModel.findById(actor.id);
@@ -454,19 +468,31 @@ export async function applyLeave(actor: Actor, input: ApplyLeaveInput) {
 
   validateAdvanceNotice(input.leaveType, input.startDate, policy);
 
-  const days = await computeLeaveWorkingDays(input.startDate, input.endDate);
+  const typePolicy = getLeaveTypePolicy(input.leaveType, policy);
+  let days = await computeLeaveWorkingDays(
+    input.startDate,
+    input.endDate,
+    typePolicy.includeWeekends ?? false
+  );
   if (days <= 0) {
     throw new ApiError(
       400,
       "The selected range doesn't include any working days (weekends/holidays only)"
     );
   }
-  const typePolicy = getLeaveTypePolicy(input.leaveType, policy);
-  if (days < typePolicy.minDurationDays) {
-    throw new ApiError(400, `Leave must be at least ${typePolicy.minDurationDays} working day(s)`);
-  }
-  if (days > typePolicy.maxDurationDays) {
-    throw new ApiError(400, `Leave cannot exceed ${typePolicy.maxDurationDays} working day(s)`);
+
+  // A half day is a fixed, minimal unit of its own — not subject to the
+  // type's min/max-working-days-per-request policy (that policy is about
+  // how many whole days a request spans, which doesn't apply here).
+  if (input.isHalfDay) {
+    days = 0.5;
+  } else {
+    if (typePolicy.minDurationDays !== null && days < typePolicy.minDurationDays) {
+      throw new ApiError(400, `Leave must be at least ${typePolicy.minDurationDays} working day(s)`);
+    }
+    if (days > typePolicy.maxDurationDays) {
+      throw new ApiError(400, `Leave cannot exceed ${typePolicy.maxDurationDays} working day(s)`);
+    }
   }
 
   // Rule: Paid leaves cannot exceed 2 working days. Requests > 2 days must be Unpaid Leave.
@@ -520,6 +546,7 @@ export async function applyLeave(actor: Actor, input: ApplyLeaveInput) {
     startDate: input.startDate,
     endDate: input.endDate,
     days,
+    isHalfDay: input.isHalfDay ?? false,
     reason: input.reason,
     status: LEAVE_REQUEST_STATUS.PENDING,
   });
@@ -553,6 +580,111 @@ export async function applyLeave(actor: Actor, input: ApplyLeaveInput) {
   });
 
   return toPublicLeave(leave);
+}
+
+/**
+ * Admin shortcut for backfilling a single day as leave (e.g. while editing
+ * an employee's attendance) — creates a same-day leave request and
+ * immediately approves it via the normal approveLeave path, so quota
+ * deduction and employee notification stay identical to a regular
+ * apply-then-approve flow. Unlike applyLeave, this skips the advance-notice
+ * check (the whole point is backfilling past/near-term days) but keeps
+ * every other leave-policy rule (joining date, overlap, quota, once-a-month
+ * casual leave, min duration). Any existing Attendance record for that date
+ * is cleared afterward so the day reads as On Leave instead of whatever
+ * check-in/out happened to be stored (see getMonthDayStatuses).
+ */
+export async function adminMarkDayAsLeave(
+  admin: Actor,
+  employeeId: string,
+  date: string,
+  leaveType: LeaveType,
+  reason?: string
+) {
+  const employee = await UserModel.findById(employeeId);
+  if (!employee) throw new ApiError(404, "Employee not found");
+  if (!APPLY_ALLOWED_STATUSES.includes(employee.status)) {
+    throw new ApiError(403, "This employee's account is not eligible for leave");
+  }
+
+  const joiningDateStr = getISTDateString(employee.joiningDate);
+  if (date < joiningDateStr) {
+    throw new ApiError(400, "Cannot mark leave before the employee's joining date");
+  }
+
+  const overlap = await LeaveRequestModel.findOne({
+    employee: employeeId,
+    status: { $in: [LEAVE_REQUEST_STATUS.PENDING, LEAVE_REQUEST_STATUS.APPROVED] },
+    startDate: { $lte: date },
+    endDate: { $gte: date },
+  });
+  if (overlap) {
+    throw new ApiError(
+      409,
+      "This employee already has a pending or approved leave request covering this date"
+    );
+  }
+
+  const policy = getLeavePolicy();
+  if (leaveType === LEAVE_TYPES.UNPAID && !policy.unpaidAllowed) {
+    throw new ApiError(403, "Unpaid leave is not permitted under the current leave policy");
+  }
+
+  const typePolicy = getLeaveTypePolicy(leaveType, policy);
+  const days = await computeLeaveWorkingDays(date, date, typePolicy.includeWeekends ?? false);
+  if (days <= 0) {
+    throw new ApiError(400, "This date is a weekend or holiday — it doesn't need to be marked as leave");
+  }
+
+  if (typePolicy.minDurationDays !== null && days < typePolicy.minDurationDays) {
+    throw new ApiError(
+      400,
+      `${LEAVE_TYPE_LABELS[leaveType]} leave must be at least ${typePolicy.minDurationDays} working day(s)`
+    );
+  }
+
+  if (leaveType === LEAVE_TYPES.CASUAL_PAID) {
+    const monthPrefix = date.slice(0, 7);
+    const existingCasualInMonth = await LeaveRequestModel.findOne({
+      employee: employeeId,
+      leaveType: LEAVE_TYPES.CASUAL_PAID,
+      status: { $in: [LEAVE_REQUEST_STATUS.PENDING, LEAVE_REQUEST_STATUS.APPROVED] },
+      startDate: { $regex: `^${monthPrefix}` },
+    });
+    if (existingCasualInMonth) {
+      throw new ApiError(400, "This employee has already taken casual leave this month");
+    }
+  }
+
+  const leave = await LeaveRequestModel.create({
+    employee: employeeId,
+    leaveType,
+    startDate: date,
+    endDate: date,
+    days,
+    reason: reason?.trim() || "Marked by admin",
+    status: LEAVE_REQUEST_STATUS.PENDING,
+  });
+
+  await recordActivity({
+    actor: admin,
+    action: ACTIVITY_ACTIONS.LEAVE_MARKED_BY_ADMIN,
+    targetType: "LeaveRequest",
+    targetId: toId(leave),
+    metadata: { employeeId, leaveType, date },
+  });
+
+  let approved;
+  try {
+    approved = await approveLeave(admin, toId(leave));
+  } catch (err) {
+    await LeaveRequestModel.deleteOne({ _id: leave._id });
+    throw err;
+  }
+
+  await AttendanceModel.deleteOne({ employee: employeeId, date });
+
+  return approved;
 }
 
 interface ListQuery {
@@ -704,9 +836,11 @@ export async function approveLeave(actor: Actor, leaveId: string, comment?: stri
           quota = policy.sickQuotaPerHalf;
         } else {
           field = "sickUsedH2";
+          const sickCarryForward =
+            getLeaveTypePolicy(LEAVE_TYPES.SICK, policy).carryForwardEnabled ??
+            policy.carryForwardEnabled;
           const h1Remaining = policy.sickQuotaPerHalf - balance.sickUsedH1;
-          quota =
-            policy.sickQuotaPerHalf + (policy.carryForwardEnabled ? Math.max(0, h1Remaining) : 0);
+          quota = policy.sickQuotaPerHalf + (sickCarryForward ? Math.max(0, h1Remaining) : 0);
         }
       } else if (leave.leaveType === LEAVE_TYPES.CASUAL_PAID) {
         if (leaveHalf(leave.startDate) === "H1") {
@@ -714,10 +848,12 @@ export async function approveLeave(actor: Actor, leaveId: string, comment?: stri
           quota = policy.casualPaidQuotaPerHalf;
         } else {
           field = "casualPaidUsedH2";
+          const casualCarryForward =
+            getLeaveTypePolicy(LEAVE_TYPES.CASUAL_PAID, policy).carryForwardEnabled ??
+            policy.carryForwardEnabled;
           const h1Remaining = policy.casualPaidQuotaPerHalf - balance.casualPaidUsedH1;
           quota =
-            policy.casualPaidQuotaPerHalf +
-            (policy.carryForwardEnabled ? Math.max(0, h1Remaining) : 0);
+            policy.casualPaidQuotaPerHalf + (casualCarryForward ? Math.max(0, h1Remaining) : 0);
         }
       } else if (leave.leaveType === LEAVE_TYPES.ANNUAL) {
         field = "annualUsed";
@@ -1013,7 +1149,7 @@ export async function adjustLeaveBalance(
   }
 
   if (input.delta > 0) {
-    return grantExtraLeave(actor, {
+    await grantExtraLeave(actor, {
       employeeId,
       days: input.delta,
       reason: input.reason,
@@ -1021,6 +1157,7 @@ export async function adjustLeaveBalance(
       period,
       year: input.year,
     }, { skipMigrationCheck: true });
+    return { adjusted: true };
   }
 
   const amount = Math.abs(input.delta);
@@ -1112,7 +1249,6 @@ export async function updateLeaveAllocation(
 
   const employee = await UserModel.findById(allocation.employee);
   if (!employee) throw new ApiError(404, "Employee not found");
-  assertLeaveMigrationConfirmed(employee);
 
   if (input.days !== undefined && input.days !== allocation.days) {
     const diff = input.days - allocation.days;
@@ -1170,7 +1306,6 @@ export async function deleteLeaveAllocation(actor: Actor, id: string) {
 
   const employee = await UserModel.findById(allocation.employee);
   if (!employee) throw new ApiError(404, "Employee not found");
-  assertLeaveMigrationConfirmed(employee);
 
   const balance = await LeaveBalanceModel.findOne({
     employee: allocation.employee,

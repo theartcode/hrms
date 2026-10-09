@@ -4,6 +4,9 @@ export interface LeaveBalanceBucket {
   used: number;
   total: number | null;
   baseTotal?: number | null;
+  // Days carried over from the previous half (H1 -> H2) via Carry Forward.
+  // Always 0 on half1.
+  carriedForward?: number;
   remaining: number | null;
   extra?: number;
 }
@@ -19,6 +22,9 @@ export interface AnnualLeaveBalanceBucket {
 export interface LeaveBalance {
   year: number;
   employmentType: "PROBATION" | "PERMANENT";
+  // Once true, H1's leftover days are already folded into H2's total —
+  // half1.remaining is no longer separately usable/addable.
+  firstHalfOver: boolean;
   sick: {
     half1: LeaveBalanceBucket;
     half2: LeaveBalanceBucket;
@@ -56,6 +62,7 @@ export interface LeaveRequest {
   startDate: string;
   endDate: string;
   days: number;
+  isHalfDay?: boolean;
   reason: string;
   status: LeaveRequestStatus;
   reviewedBy: string | null;

@@ -36,7 +36,7 @@ export interface ILeavePolicy {
   // (Jan-Jun, Jul-Dec) rather than one flat annual quota — these are the
   // per-half amounts, so each type's effective yearly total is 2x this
   // value. See leave.service.ts's getLeaveBalance for how unused H1 days
-  // carry into H2 (shared carryForwardEnabled toggle below, applies to both).
+  // carry into H2 (per-type carryForwardEnabled in leaveTypeSettings below).
   sickQuotaPerHalf: number;
   casualPaidQuotaPerHalf: number;
   casualPaidNoticeDays: number;
@@ -48,6 +48,10 @@ export interface ILeavePolicy {
   annualNoticeDays: number;
   leaveTypeSettings?: ILeaveTypeSettings;
   unpaidAllowed: boolean;
+  // Legacy shared default, from before Carry Forward was configurable per
+  // type — kept only as the fallback for a type whose leaveTypeSettings
+  // entry doesn't set its own carryForwardEnabled yet. New reads/writes
+  // should go through leaveTypeSettings[type].carryForwardEnabled instead.
   carryForwardEnabled: boolean;
   minDurationDays: number;
   maxDurationDays: number;
@@ -55,8 +59,18 @@ export interface ILeavePolicy {
 
 export interface ILeaveTypePolicy {
   advanceNoticeDays: number;
-  minDurationDays: number;
+  // null means "no minimum" — only Max Duration is enforced for this type.
+  minDurationDays: number | null;
   maxDurationDays: number;
+  // When true, weekends falling inside the requested range count toward the
+  // leave's day total instead of being skipped (holidays are still always
+  // excluded) — see computeLeaveWorkingDays in leave.util.ts.
+  includeWeekends: boolean;
+  // Per-type override of the legacy global carryForwardEnabled below — only
+  // consulted for SICK/CASUAL_PAID (the only two types with H1/H2 buckets;
+  // see getLeaveBalance). Undefined falls back to the global value, for
+  // configs saved before this field existed.
+  carryForwardEnabled?: boolean;
 }
 
 export interface ILeaveTypeSettings {
@@ -168,6 +182,17 @@ const officeSettingsSchema = new Schema<IOfficeSettings>(
   { _id: false }
 );
 
+const leaveTypePolicySchema = new Schema<ILeaveTypePolicy>(
+  {
+    advanceNoticeDays: Number,
+    minDurationDays: Number,
+    maxDurationDays: Number,
+    includeWeekends: { type: Boolean, default: false },
+    carryForwardEnabled: Boolean,
+  },
+  { _id: false }
+);
+
 const leavePolicySchema = new Schema<ILeavePolicy>(
   {
     sickQuotaPerHalf: { type: Number, required: true, default: 3 },
@@ -178,11 +203,11 @@ const leavePolicySchema = new Schema<ILeavePolicy>(
     leaveTypeSettings: {
       type: new Schema(
         {
-          SICK: { type: new Schema({ advanceNoticeDays: Number, minDurationDays: Number, maxDurationDays: Number }, { _id: false }) },
-          CASUAL_PAID: { type: new Schema({ advanceNoticeDays: Number, minDurationDays: Number, maxDurationDays: Number }, { _id: false }) },
-          ANNUAL: { type: new Schema({ advanceNoticeDays: Number, minDurationDays: Number, maxDurationDays: Number }, { _id: false }) },
-          UNPAID: { type: new Schema({ advanceNoticeDays: Number, minDurationDays: Number, maxDurationDays: Number }, { _id: false }) },
-          COMP_OFF: { type: new Schema({ advanceNoticeDays: Number, minDurationDays: Number, maxDurationDays: Number }, { _id: false }) },
+          SICK: { type: leaveTypePolicySchema },
+          CASUAL_PAID: { type: leaveTypePolicySchema },
+          ANNUAL: { type: leaveTypePolicySchema },
+          UNPAID: { type: leaveTypePolicySchema },
+          COMP_OFF: { type: leaveTypePolicySchema },
         },
         { _id: false }
       ),

@@ -40,6 +40,17 @@ export const updateOfficeSettingsSchema = z.object({
   }),
 });
 
+const leaveTypePolicyShape = z.object({
+  advanceNoticeDays: z.coerce.number().int().min(0).max(365),
+  // null means "no minimum" — explicitly listed first so JSON null isn't
+  // coerced to 0 by the number branch (same pattern as
+  // employee.validation.ts's optionalGraceMinutes).
+  minDurationDays: z.union([z.null(), z.coerce.number().int().min(1).max(365)]),
+  maxDurationDays: z.coerce.number().int().min(1).max(365),
+  includeWeekends: z.coerce.boolean().optional(),
+  carryForwardEnabled: z.coerce.boolean().optional(),
+});
+
 export const updateLeavePolicySchema = z.object({
   body: z.object({
     sickQuotaPerHalf: z.coerce.number().int().min(0).max(365).optional(),
@@ -49,11 +60,11 @@ export const updateLeavePolicySchema = z.object({
     annualNoticeDays: z.coerce.number().int().min(0).max(365).optional(),
     leaveTypeSettings: z
       .object({
-        SICK: z.object({ advanceNoticeDays: z.coerce.number().int().min(0).max(365), minDurationDays: z.coerce.number().int().min(1).max(365), maxDurationDays: z.coerce.number().int().min(1).max(365) }).optional(),
-        CASUAL_PAID: z.object({ advanceNoticeDays: z.coerce.number().int().min(0).max(365), minDurationDays: z.coerce.number().int().min(1).max(365), maxDurationDays: z.coerce.number().int().min(1).max(365) }).optional(),
-        ANNUAL: z.object({ advanceNoticeDays: z.coerce.number().int().min(0).max(365), minDurationDays: z.coerce.number().int().min(1).max(365), maxDurationDays: z.coerce.number().int().min(1).max(365) }).optional(),
-        UNPAID: z.object({ advanceNoticeDays: z.coerce.number().int().min(0).max(365), minDurationDays: z.coerce.number().int().min(1).max(365), maxDurationDays: z.coerce.number().int().min(1).max(365) }).optional(),
-        COMP_OFF: z.object({ advanceNoticeDays: z.coerce.number().int().min(0).max(365), minDurationDays: z.coerce.number().int().min(1).max(365), maxDurationDays: z.coerce.number().int().min(1).max(365) }).optional(),
+        SICK: leaveTypePolicyShape.optional(),
+        CASUAL_PAID: leaveTypePolicyShape.optional(),
+        ANNUAL: leaveTypePolicyShape.optional(),
+        UNPAID: leaveTypePolicyShape.optional(),
+        COMP_OFF: leaveTypePolicyShape.optional(),
       })
       .optional(),
     unpaidAllowed: z.coerce.boolean().optional(),

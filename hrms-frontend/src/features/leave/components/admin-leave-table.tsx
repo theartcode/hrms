@@ -152,7 +152,12 @@ export function AdminLeaveTable({
                     <TableCell>
                       {formatISTDate(leave.startDate)} – {formatISTDate(leave.endDate)}
                     </TableCell>
-                    <TableCell>{leave.days}</TableCell>
+                    <TableCell>
+                      {leave.days}
+                      {leave.isHalfDay && (
+                        <span className="ml-1 text-xs text-muted-foreground">(Half Day)</span>
+                      )}
+                    </TableCell>
                     <TableCell className="max-w-48 truncate">{leave.reason}</TableCell>
                     <TableCell>
                       <LeaveStatusBadge status={leave.status} />

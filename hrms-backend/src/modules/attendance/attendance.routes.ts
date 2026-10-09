@@ -5,6 +5,7 @@ import { validate } from "../../shared/middleware/validate";
 import { ROLES } from "../../shared/constants/roles";
 import {
   adminListQuerySchema,
+  adminSetAttendanceSchema,
   exportQuerySchema,
   monthQuerySchema,
   notCheckedInQuerySchema,
@@ -47,6 +48,12 @@ router.get(
   manage,
   validate(notCheckedInQuerySchema),
   attendanceController.notCheckedIn
+);
+router.put(
+  "/admin/:employeeId/:date",
+  manage,
+  validate(adminSetAttendanceSchema),
+  attendanceController.adminSetAttendance
 );
 
 export default router;

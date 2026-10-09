@@ -32,8 +32,11 @@ export interface LeavePolicy {
 
 export interface LeaveTypePolicy {
   advanceNoticeDays: number;
-  minDurationDays: number;
+  // null means "no minimum" — only Max Duration is enforced for this type.
+  minDurationDays: number | null;
   maxDurationDays: number;
+  includeWeekends?: boolean;
+  carryForwardEnabled?: boolean;
 }
 
 export interface NotificationEventToggles {

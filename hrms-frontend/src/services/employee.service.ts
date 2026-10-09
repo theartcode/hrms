@@ -6,6 +6,7 @@ import {
   EmployeeListResult,
   PaymentInfo,
   StatutoryInfo,
+  UpcomingAnniversary,
 } from "@/types/employee.types";
 
 type ApiSuccess<T> = { success: true; message: string; data: T };
@@ -45,6 +46,12 @@ export function listAssignableEmployees() {
   return apiFetch<ApiSuccess<{ employees: AssignableEmployee[] }>>(
     API_ENDPOINTS.EMPLOYEES.ASSIGNABLE
   ).then((res) => res.data.employees);
+}
+
+export function listUpcomingAnniversaries(days = 30) {
+  return apiFetch<ApiSuccess<{ anniversaries: UpcomingAnniversary[] }>>(
+    `${API_ENDPOINTS.EMPLOYEES.UPCOMING_ANNIVERSARIES}?days=${days}`
+  ).then((res) => res.data.anniversaries);
 }
 
 export interface CreateEmployeeInput {

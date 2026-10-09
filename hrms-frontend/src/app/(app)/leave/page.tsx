@@ -44,15 +44,17 @@ export default function LeavePage() {
         </div>
       </div>
 
-      <div className="max-w-lg">
-        <LeaveBalanceCard />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-1">
+          <LeaveBalanceCard />
+        </div>
+        <div className="flex flex-col gap-6 lg:col-span-2">
+          <AttendanceCalendar onDayClick={setSelectedDay} />
+          <Card className="p-4">
+            <MyLeaveHistory />
+          </Card>
+        </div>
       </div>
-
-      <AttendanceCalendar onDayClick={setSelectedDay} />
-
-      <Card className="p-4">
-        <MyLeaveHistory />
-      </Card>
 
       <AttendanceDayDialog day={selectedDay} onClose={() => setSelectedDay(null)} readOnly />
     </div>

@@ -91,6 +91,12 @@ async function listAssignable(req: Request, res: Response): Promise<void> {
   sendSuccess(res, { employees });
 }
 
+async function upcomingAnniversaries(req: Request, res: Response): Promise<void> {
+  const days = Number(req.query.days) || 30;
+  const anniversaries = await employeeService.listUpcomingWorkAnniversaries(days);
+  sendSuccess(res, { anniversaries });
+}
+
 async function submitPaymentInfo(req: Request, res: Response): Promise<void> {
   const employee = await employeeService.submitPaymentInfoChange(req.user!, req.body);
   sendSuccess(res, { employee }, "Bank details submitted for approval");
@@ -125,6 +131,7 @@ export {
   getMe,
   updateMe,
   listAssignable,
+  upcomingAnniversaries,
   submitPaymentInfo,
   approvePaymentInfo,
   rejectPaymentInfo,

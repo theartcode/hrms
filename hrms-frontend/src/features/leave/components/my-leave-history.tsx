@@ -132,7 +132,12 @@ export function MyLeaveHistory() {
                   <TableCell>
                     {formatISTDate(leave.startDate)} – {formatISTDate(leave.endDate)}
                   </TableCell>
-                  <TableCell>{leave.days}</TableCell>
+                  <TableCell>
+                    {leave.days}
+                    {leave.isHalfDay && (
+                      <span className="ml-1 text-xs text-muted-foreground">(Half Day)</span>
+                    )}
+                  </TableCell>
                   <TableCell>{formatISTDate(leave.createdAt.slice(0, 10))}</TableCell>
                   <TableCell>
                     <LeaveStatusBadge status={leave.status} />

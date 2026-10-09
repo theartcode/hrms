@@ -110,6 +110,17 @@ export function notCheckedInToday(date?: string) {
   );
 }
 
+export function adminSetAttendance(
+  employeeId: string,
+  date: string,
+  input: { checkIn: string | null; checkOut: string | null }
+) {
+  return apiFetch<ApiSuccess<{ attendance: AttendanceRecord | null }>>(
+    API_ENDPOINTS.ATTENDANCE.ADMIN_SET(employeeId, date),
+    { method: "PUT", body: JSON.stringify(input) }
+  );
+}
+
 export async function exportCsv(
   params: Omit<AdminListParams, "page" | "limit">
 ): Promise<void> {

@@ -152,12 +152,77 @@ export function getOfficeHours(): { startTime: string; endTime: string; gracePer
   return { startTime, endTime, gracePeriodMinutes };
 }
 
+/**
+ * Admin-only direct edit of a specific employee's attendance for a specific
+ * date — distinct from the employee-submitted correction-request/approval
+ * flow, this lets an admin set the record outright (e.g. backfilling a day
+ * that was never checked in, fixing a bad timestamp). Passing both
+ * checkIn/checkOut as null deletes the record entirely, reverting that date
+ * to whatever getMonthDayStatuses synthesizes (Absent/Weekend/Holiday/On
+ * Leave) — there is no stored "manually cleared" state to track separately.
+ */
+export async function adminSetAttendance(
+  admin: Actor,
+  employeeId: string,
+  date: string,
+  input: { checkIn: Date | null; checkOut: Date | null }
+): Promise<PublicAttendanceRecord | null> {
+  const employee = await UserModel.findById(employeeId).select("gracePeriodOverrideMinutes");
+  if (!employee) throw new ApiError(404, "Employee not found");
+
+  if (input.checkOut && !input.checkIn) {
+    throw new ApiError(422, "Check-out requires a check-in time");
+  }
+
+  const existing = await AttendanceModel.findOne({ employee: employeeId, date });
+
+  if (!input.checkIn && !input.checkOut) {
+    if (existing) {
+      const targetId = toId(existing);
+      await existing.deleteOne();
+      await recordActivity({
+        actor: admin,
+        action: ACTIVITY_ACTIONS.ATTENDANCE_ADMIN_CLEARED,
+        targetType: "Attendance",
+        targetId,
+        metadata: { employeeId, date },
+      });
+    }
+    return null;
+  }
+
+  const { status, workedHours } = computeAttendanceStatus(
+    input.checkIn!,
+    input.checkOut,
+    employee.gracePeriodOverrideMinutes ?? null
+  );
+
+  const record = existing ?? new AttendanceModel({ employee: employeeId, date, status });
+  record.checkIn = input.checkIn;
+  record.checkOut = input.checkOut;
+  record.status = status;
+  record.workedHours = workedHours;
+  await record.save();
+
+  await recordActivity({
+    actor: admin,
+    action: ACTIVITY_ACTIONS.ATTENDANCE_ADMIN_EDITED,
+    targetType: "Attendance",
+    targetId: toId(record),
+    metadata: { employeeId, date, checkIn: input.checkIn, checkOut: input.checkOut },
+  });
+
+  return toPublicRecord(record, getISTDateString(new Date()));
+}
+
 export interface DayStatusEntry {
   date: string;
   checkIn: Date | null;
   checkOut: Date | null;
   workedHours: number | null;
   status: AttendanceStatus | null;
+  // Set only when status is HOLIDAY — which named holiday it is.
+  holidayName?: string | null;
 }
 
 /**
@@ -186,6 +251,7 @@ export async function getMonthDayStatuses(
 
   const recordsByDate = new Map(records.map((r) => [r.date, r]));
   const holidayDates = new Set(holidays.map((h) => h.date));
+  const holidayNameByDate = new Map(holidays.map((h) => [h.date, h.name]));
 
   return enumerateISTDateStrings(start, end).map((dateStr) => {
     const record = recordsByDate.get(dateStr);
@@ -217,7 +283,14 @@ export async function getMonthDayStatuses(
       status = ATTENDANCE_STATUS.ABSENT;
     }
 
-    return { date: dateStr, checkIn: null, checkOut: null, workedHours: null, status };
+    return {
+      date: dateStr,
+      checkIn: null,
+      checkOut: null,
+      workedHours: null,
+      status,
+      holidayName: status === ATTENDANCE_STATUS.HOLIDAY ? holidayNameByDate.get(dateStr) : null,
+    };
   });
 }
 

@@ -37,7 +37,12 @@ export function AttendanceDayDialog({
             </DialogHeader>
 
             <div className="flex flex-col gap-4">
-              <AttendanceStatusBadge status={day.status} />
+              <div className="flex items-center gap-2">
+                <AttendanceStatusBadge status={day.status} />
+                {day.status === "HOLIDAY" && day.holidayName && (
+                  <span className="text-sm text-muted-foreground">{day.holidayName}</span>
+                )}
+              </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>

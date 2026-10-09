@@ -21,6 +21,16 @@ async function officeHours(_req: Request, res: Response): Promise<void> {
   sendSuccess(res, attendanceService.getOfficeHours());
 }
 
+async function adminSetAttendance(req: Request, res: Response): Promise<void> {
+  const { employeeId, date } = req.validated!.params as { employeeId: string; date: string };
+  const { checkIn, checkOut } = req.body as { checkIn: Date | null; checkOut: Date | null };
+  const attendance = await attendanceService.adminSetAttendance(req.user!, employeeId, date, {
+    checkIn,
+    checkOut,
+  });
+  sendSuccess(res, { attendance }, attendance ? "Attendance updated" : "Attendance record cleared");
+}
+
 function currentYearMonth() {
   const now = new Date();
   return { year: now.getFullYear(), month: now.getMonth() + 1 };
@@ -124,4 +134,5 @@ export {
   adminList,
   adminExport,
   notCheckedIn,
+  adminSetAttendance,
 };

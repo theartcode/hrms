@@ -6,7 +6,8 @@ export interface ILeaveRequest extends Document {
   leaveType: LeaveType;
   startDate: string; // "YYYY-MM-DD" IST, inclusive
   endDate: string; // "YYYY-MM-DD" IST, inclusive
-  days: number; // working days within the range (excludes Sundays + active holidays)
+  days: number; // working days within the range (excludes Sundays + active holidays); 0.5 for a half-day request
+  isHalfDay: boolean; // single-day request for half of that day instead of the whole day
   reason: string;
   status: LeaveRequestStatus;
   reviewedBy: Types.ObjectId | null;
@@ -22,6 +23,7 @@ const leaveRequestSchema = new Schema<ILeaveRequest>(
     startDate: { type: String, required: true },
     endDate: { type: String, required: true },
     days: { type: Number, required: true },
+    isHalfDay: { type: Boolean, required: true, default: false },
     reason: { type: String, required: true, trim: true },
     status: {
       type: String,

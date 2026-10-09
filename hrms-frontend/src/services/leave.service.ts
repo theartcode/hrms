@@ -25,11 +25,26 @@ export interface ApplyLeaveInput {
   leaveType: string;
   startDate: string;
   endDate: string;
+  isHalfDay?: boolean;
   reason: string;
 }
 
 export function applyLeave(input: ApplyLeaveInput) {
   return apiFetch<ApiSuccess<{ leave: LeaveRequest }>>(API_ENDPOINTS.LEAVES.APPLY, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export interface AdminMarkDayAsLeaveInput {
+  employeeId: string;
+  date: string;
+  leaveType: string;
+  reason?: string;
+}
+
+export function adminMarkDayAsLeave(input: AdminMarkDayAsLeaveInput) {
+  return apiFetch<ApiSuccess<{ leave: LeaveRequest }>>(API_ENDPOINTS.LEAVES.ADMIN_MARK_DAY, {
     method: "POST",
     body: JSON.stringify(input),
   });

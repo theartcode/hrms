@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -39,10 +40,15 @@ const schema = z
     leaveType: z.string().min(1, "Select a leave type"),
     startDate: z.string().regex(dateRegex, "Select a start date"),
     endDate: z.string().regex(dateRegex, "Select an end date"),
+    isHalfDay: z.boolean().optional(),
     reason: z.string().trim().min(5, "Please provide a reason (at least 5 characters)"),
   })
   .refine((data) => data.startDate <= data.endDate, {
     message: "Start date must be before or equal to the end date",
+    path: ["endDate"],
+  })
+  .refine((data) => !data.isHalfDay || data.startDate === data.endDate, {
+    message: "A half-day request can only be for a single date",
     path: ["endDate"],
   });
 
@@ -76,11 +82,24 @@ export function ApplyLeaveDialog() {
     handleSubmit,
     control,
     reset,
+    watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { leaveType: LEAVE_TYPES.CASUAL_PAID },
+    defaultValues: { leaveType: LEAVE_TYPES.CASUAL_PAID, isHalfDay: false },
   });
+
+  const isHalfDay = watch("isHalfDay");
+  const startDate = watch("startDate");
+
+  // A half-day request is always a single date — keep End Date in lockstep
+  // with Start Date while the checkbox is on, rather than letting it drift.
+  useEffect(() => {
+    if (isHalfDay && startDate) {
+      setValue("endDate", startDate, { shouldValidate: true });
+    }
+  }, [isHalfDay, startDate, setValue]);
 
   const mutation = useMutation({
     mutationFn: (values: FormValues) => leaveService.applyLeave(values),
@@ -124,8 +143,10 @@ export function ApplyLeaveDialog() {
           <div className="rounded-md bg-muted/60 p-3 text-xs text-muted-foreground space-y-1">
             <p className="font-medium text-foreground">Leave Policy Reminders:</p>
             <ul className="list-disc pl-4 space-y-0.5">
-              <li>Paid leaves (Casual/Sick) are capped at <strong>max 2 working days</strong> per request. Leaves &gt; 2 days must be applied as <strong>Unpaid Leave</strong>.</li>
+              <li>Sick, Casual, Annual, and Comp Off leave are capped at <strong>max 2 working days</strong> per request. Leaves &gt; 2 days must be applied as <strong>Unpaid Leave</strong>.</li>
               <li>Casual leave can be taken at most <strong>once per calendar month</strong>.</li>
+              <li>Unused Sick and Casual Leave from Jan–Jun <strong>carries forward</strong> into Jul–Dec (not further, and not for Annual Leave).</li>
+              <li>Need less than a full day? Check <strong>Half day</strong> below to deduct 0.5 day instead of 1.</li>
               <li>Pending requests immediately reserve leave days from your balance.</li>
             </ul>
           </div>
@@ -178,7 +199,7 @@ export function ApplyLeaveDialog() {
               <Input
                 id="endDate"
                 type="date"
-                disabled={isSubmitting}
+                disabled={isSubmitting || isHalfDay}
                 {...register("endDate")}
               />
               {errors.endDate && (
@@ -186,6 +207,24 @@ export function ApplyLeaveDialog() {
               )}
             </div>
           </div>
+
+          <Controller
+            control={control}
+            name="isHalfDay"
+            render={({ field }) => (
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={field.value ?? false}
+                  onCheckedChange={(checked) => field.onChange(checked === true)}
+                  disabled={isSubmitting}
+                />
+                Half day
+                <span className="text-xs text-muted-foreground">
+                  (0.5 day, Start Date only)
+                </span>
+              </label>
+            )}
+          />
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="reason">Reason</Label>

@@ -15,6 +15,7 @@ import {
   importLeaveHistorySchema,
   leaveIdParamSchema,
   listLeavesSchema,
+  markDayAsLeaveSchema,
   reviewLeaveSchema,
   updateAllocationSchema,
 } from "./leave.validation";
@@ -36,6 +37,7 @@ router.patch(
 );
 
 router.get("/", manage, validate(adminListLeavesSchema), leaveController.adminList);
+router.post("/admin/mark-day", manage, validate(markDayAsLeaveSchema), leaveController.markDay);
 router.post("/allocations", manage, validate(grantExtraLeaveSchema), leaveController.grantExtra);
 router.get("/allocations", manage, leaveController.listAllocations);
 router.patch(

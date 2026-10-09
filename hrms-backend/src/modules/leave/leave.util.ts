@@ -8,10 +8,15 @@ import { HolidayModel } from "../holiday/holiday.model";
  * day off you already have doesn't make sense. Mirrors the same weekend/
  * holiday rules the attendance engine uses (Phase 4), so the two never
  * disagree about which days are "working days."
+ *
+ * `includeWeekends` (per-leave-type policy, Leave Policy settings) counts
+ * weekend days toward the total instead of skipping them — holidays are
+ * still always excluded regardless.
  */
 export async function computeLeaveWorkingDays(
   startDate: string,
-  endDate: string
+  endDate: string,
+  includeWeekends = false
 ): Promise<number> {
   const dateStrings = enumerateISTDateStrings(startDate, endDate);
 
@@ -24,7 +29,7 @@ export async function computeLeaveWorkingDays(
   let count = 0;
   for (const dateStr of dateStrings) {
     const isWeekend = isConfiguredWeekend(new Date(`${dateStr}T12:00:00+05:30`));
-    if (!isWeekend && !holidayDates.has(dateStr)) {
+    if ((includeWeekends || !isWeekend) && !holidayDates.has(dateStr)) {
       count += 1;
     }
   }

@@ -43,6 +43,7 @@ router.post(
 // (Express matches route patterns in registration order — same reasoning
 // as task.routes.ts's /tasks/me and /tasks/team ordering).
 router.get("/assignable", employeeController.listAssignable);
+router.get("/upcoming-anniversaries", employeeController.upcomingAnniversaries);
 
 router.get(
   "/:id",

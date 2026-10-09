@@ -11,6 +11,7 @@ export const applyLeaveSchema = z.object({
     leaveType: z.enum(Object.values(LEAVE_TYPES) as [string, ...string[]]),
     startDate: dateString,
     endDate: dateString,
+    isHalfDay: z.coerce.boolean().optional(),
     reason: z.string().trim().min(5, "Please provide a reason (at least 5 characters)"),
   }),
 });
@@ -42,6 +43,15 @@ export const balanceQuerySchema = z.object({
 
 export const leaveIdParamSchema = z.object({
   params: z.object({ id: objectId }),
+});
+
+export const markDayAsLeaveSchema = z.object({
+  body: z.object({
+    employeeId: objectId,
+    date: dateString,
+    leaveType: z.enum(Object.values(LEAVE_TYPES) as [string, ...string[]]),
+    reason: z.string().trim().max(500).optional(),
+  }),
 });
 
 export const reviewLeaveSchema = z.object({

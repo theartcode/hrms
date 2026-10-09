@@ -7,6 +7,7 @@ import {
   EmployeeStatus,
   LOGIN_ALLOWED_STATUSES,
 } from "../../shared/constants/employeeStatus";
+import { getISTDateString, daysBetweenDateStrings } from "../../shared/utils/istDate";
 import { EMPLOYMENT_TYPE } from "../../shared/constants/employmentType";
 import { ACTIVITY_ACTIONS } from "../../shared/constants/activityActions";
 import { NOTIFICATION_TYPES } from "../../shared/constants/notificationTypes";
@@ -188,6 +189,56 @@ export async function listAssignableEmployees(actor: Actor) {
     .sort({ fullName: 1 });
 
   return users.map(toAssignableEmployee);
+}
+
+export interface UpcomingAnniversary {
+  employeeId: string;
+  fullName: string;
+  date: string;
+  years: number;
+}
+
+// Visible to any authenticated employee (not just admins) — nothing
+// sensitive here, just who's coming up on a work anniversary. "Anniversary"
+// means years of service, so someone who joined this calendar year is
+// excluded until their first one actually arrives (years >= 1).
+export async function listUpcomingWorkAnniversaries(withinDays = 30): Promise<UpcomingAnniversary[]> {
+  const employees = await UserModel.find({ status: { $in: LOGIN_ALLOWED_STATUSES } }).select(
+    "employeeId fullName joiningDate"
+  );
+
+  const todayStr = getISTDateString();
+  const todayYear = Number(todayStr.slice(0, 4));
+
+  const results: UpcomingAnniversary[] = [];
+  for (const employee of employees) {
+    const joiningStr = getISTDateString(employee.joiningDate);
+    const monthDay = joiningStr.slice(5);
+    const joiningYear = Number(joiningStr.slice(0, 4));
+
+    let occurrenceYear = todayYear;
+    let occurrence = `${occurrenceYear}-${monthDay}`;
+    if (occurrence < todayStr) {
+      occurrenceYear += 1;
+      occurrence = `${occurrenceYear}-${monthDay}`;
+    }
+
+    const years = occurrenceYear - joiningYear;
+    if (years < 1) continue;
+
+    const daysUntil = daysBetweenDateStrings(todayStr, occurrence);
+    if (daysUntil > withinDays) continue;
+
+    results.push({
+      employeeId: employee.employeeId,
+      fullName: employee.fullName,
+      date: occurrence,
+      years,
+    });
+  }
+
+  results.sort((a, b) => a.date.localeCompare(b.date));
+  return results;
 }
 
 async function assertReferenceDataExists(departmentId: string, designationId: string) {

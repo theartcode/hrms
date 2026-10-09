@@ -44,3 +44,16 @@ export const checkInSchema = z.object({
 });
 
 export const checkOutSchema = checkInSchema;
+
+const nullableDateTime = z.union([z.null(), z.coerce.date()]);
+
+export const adminSetAttendanceSchema = z.object({
+  params: z.object({
+    employeeId: objectId,
+    date: dateString,
+  }),
+  body: z.object({
+    checkIn: nullableDateTime,
+    checkOut: nullableDateTime,
+  }),
+});

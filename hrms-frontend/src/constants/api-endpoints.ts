@@ -16,6 +16,7 @@ export const API_ENDPOINTS = {
     CREATE: "/employees",
     ME: "/employees/me",
     ASSIGNABLE: "/employees/assignable",
+    UPCOMING_ANNIVERSARIES: "/employees/upcoming-anniversaries",
     DETAIL: (id: string) => `/employees/${id}`,
     ACTIVATE: (id: string) => `/employees/${id}/activate`,
     DEACTIVATE: (id: string) => `/employees/${id}/deactivate`,
@@ -58,6 +59,7 @@ export const API_ENDPOINTS = {
     ADMIN_LIST: "/attendance/admin",
     ADMIN_EXPORT: "/attendance/admin/export",
     ADMIN_NOT_CHECKED_IN: "/attendance/admin/not-checked-in",
+    ADMIN_SET: (employeeId: string, date: string) => `/attendance/admin/${employeeId}/${date}`,
   },
   ATTENDANCE_CORRECTIONS: {
     CREATE: "/attendance/corrections",
@@ -73,6 +75,7 @@ export const API_ENDPOINTS = {
     ADJUST_BALANCE: (employeeId: string) => `/leaves/balance/${employeeId}`,
     CANCEL: (id: string) => `/leaves/${id}/cancel`,
     ADMIN_LIST: "/leaves",
+    ADMIN_MARK_DAY: "/leaves/admin/mark-day",
     APPROVE: (id: string) => `/leaves/${id}/approve`,
     REJECT: (id: string) => `/leaves/${id}/reject`,
     ALLOCATIONS: "/leaves/allocations",
