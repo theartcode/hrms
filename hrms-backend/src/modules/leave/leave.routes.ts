@@ -4,6 +4,7 @@ import { authorize } from "../../shared/middleware/authorize";
 import { validate } from "../../shared/middleware/validate";
 import { ROLES } from "../../shared/constants/roles";
 import {
+  adminEditLeaveSchema,
   adminListLeavesSchema,
   adjustBalanceSchema,
   applyLeaveSchema,
@@ -57,6 +58,12 @@ router.delete(
   manage,
   validate(leaveIdParamSchema),
   leaveController.deleteAllocation
+);
+router.patch(
+  "/:id",
+  manage,
+  validate(adminEditLeaveSchema),
+  leaveController.adminEdit
 );
 router.patch(
   "/:id/approve",

@@ -103,6 +103,21 @@ export function cancelLeave(id: string) {
   });
 }
 
+export interface AdminEditLeaveInput {
+  leaveType?: string;
+  startDate?: string;
+  endDate?: string;
+  isHalfDay?: boolean;
+  reason?: string;
+}
+
+export function adminEditLeave(id: string, input: AdminEditLeaveInput) {
+  return apiFetch<ApiSuccess<{ leave: LeaveRequest }>>(API_ENDPOINTS.LEAVES.ADMIN_EDIT(id), {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
 export function approveLeave(id: string, comment?: string) {
   return apiFetch<ApiSuccess<{ leave: LeaveRequest }>>(API_ENDPOINTS.LEAVES.APPROVE(id), {
     method: "PATCH",

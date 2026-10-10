@@ -16,6 +16,17 @@ export const applyLeaveSchema = z.object({
   }),
 });
 
+export const adminEditLeaveSchema = z.object({
+  params: z.object({ id: objectId }),
+  body: z.object({
+    leaveType: z.enum(Object.values(LEAVE_TYPES) as [string, ...string[]]).optional(),
+    startDate: dateString.optional(),
+    endDate: dateString.optional(),
+    isHalfDay: z.coerce.boolean().optional(),
+    reason: z.string().trim().min(5, "Please provide a reason (at least 5 characters)").optional(),
+  }),
+});
+
 export const listLeavesSchema = z.object({
   query: z.object({
     page: z.coerce.number().int().min(1).optional().default(1),

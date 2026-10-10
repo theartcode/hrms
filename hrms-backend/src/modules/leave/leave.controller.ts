@@ -18,6 +18,11 @@ async function markDay(req: Request, res: Response): Promise<void> {
   sendSuccess(res, { leave }, "Day marked as leave", 201);
 }
 
+async function adminEdit(req: Request, res: Response): Promise<void> {
+  const leave = await leaveService.adminEditLeaveRequest(req.user!, String(req.params.id), req.body);
+  sendSuccess(res, { leave }, "Leave request updated");
+}
+
 async function mine(req: Request, res: Response): Promise<void> {
   const query = req.validated!.query as Parameters<typeof leaveService.listMyLeaves>[1];
   const result = await leaveService.listMyLeaves(req.user!.id, query);
@@ -152,6 +157,7 @@ async function reopenMigration(req: Request, res: Response): Promise<void> {
 export {
   apply,
   markDay,
+  adminEdit,
   mine,
   adminList,
   balance,

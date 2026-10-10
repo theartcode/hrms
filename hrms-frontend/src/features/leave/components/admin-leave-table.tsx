@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Check, ClipboardList, Loader2, X } from "lucide-react";
+import { Check, ClipboardList, Loader2, Pencil, X } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -29,6 +29,7 @@ import { LeaveRequest, PaginationInfo } from "@/types/leave.types";
 import { LEAVE_REQUEST_STATUS } from "@/constants/leave-types";
 import { LEAVE_TYPE_LABELS } from "../leave-status-meta";
 import { LeaveStatusBadge } from "./leave-status-badge";
+import { EditLeaveRequestDialog } from "./edit-leave-request-dialog";
 import * as leaveService from "@/services/leave.service";
 import { formatISTDate } from "@/lib/format-ist";
 
@@ -58,6 +59,7 @@ export function AdminLeaveTable({
     action: "approve" | "reject";
   } | null>(null);
   const [comment, setComment] = useState("");
+  const [editing, setEditing] = useState<LeaveRequest | null>(null);
   const highlightedRowRef = useRef<HTMLTableRowElement | null>(null);
 
   useEffect(() => {
@@ -165,6 +167,10 @@ export function AdminLeaveTable({
                     <TableCell className="text-right">
                       {leave.status === LEAVE_REQUEST_STATUS.PENDING && (
                         <div className="flex justify-end gap-1">
+                          <Button size="sm" variant="outline" onClick={() => setEditing(leave)}>
+                            <Pencil className="h-4 w-4" />
+                            Edit
+                          </Button>
                           <Button
                             size="sm"
                             variant="outline"
@@ -243,6 +249,8 @@ export function AdminLeaveTable({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <EditLeaveRequestDialog leave={editing} onClose={() => setEditing(null)} />
     </div>
   );
 }

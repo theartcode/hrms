@@ -447,6 +447,21 @@ export async function applyLeave(actor: Actor, input: ApplyLeaveInput) {
     throw new ApiError(400, "Cannot apply for leave before your joining date");
   }
 
+  // Casual and Annual Leave are Permanent-employee benefits — Probation
+  // employees can only apply for Sick/Unpaid/Comp Off until they're made
+  // Permanent. (Annual already resolves to a 0 balance for Probation via
+  // creditAnnualAccrual, but this gives a clear reason instead of a
+  // confusing "0 days available" rejection further down.)
+  if (
+    (input.leaveType === LEAVE_TYPES.CASUAL_PAID || input.leaveType === LEAVE_TYPES.ANNUAL) &&
+    employee.employmentType !== EMPLOYMENT_TYPE.PERMANENT
+  ) {
+    throw new ApiError(
+      403,
+      `${LEAVE_TYPE_LABELS[input.leaveType]} leave is only available to Permanent employees`
+    );
+  }
+
   const overlap = await LeaveRequestModel.findOne({
     employee: actor.id,
     status: { $in: [LEAVE_REQUEST_STATUS.PENDING, LEAVE_REQUEST_STATUS.APPROVED] },
@@ -577,6 +592,170 @@ export async function applyLeave(actor: Actor, input: ApplyLeaveInput) {
         reviewUrl: `${env.clientOrigin}/leave/admin?requestId=${toId(leave)}`,
       },
     },
+  });
+
+  return toPublicLeave(leave);
+}
+
+export interface AdminEditLeaveInput {
+  leaveType?: LeaveType;
+  startDate?: string;
+  endDate?: string;
+  isHalfDay?: boolean;
+  reason?: string;
+}
+
+/**
+ * Lets an admin correct a still-PENDING request an employee got wrong
+ * (wrong type, wrong dates, fat-fingered reason) instead of having to
+ * reject it and ask them to resubmit. Re-runs the same validation
+ * applyLeave does (overlap, duration caps, once-a-month casual, quota
+ * sufficiency, Permanent-only gating) against the merged next values,
+ * excluding this request's own row from the overlap/once-a-month checks —
+ * but skips the advance-notice check, same as the other admin-initiated
+ * leave paths in this file (adminMarkDayAsLeave, approveLeave). Approving
+ * the corrected request is still a separate step via the normal
+ * approveLeave flow — this only fixes the request's own fields.
+ */
+export async function adminEditLeaveRequest(
+  admin: Actor,
+  leaveId: string,
+  input: AdminEditLeaveInput
+) {
+  const leave = await LeaveRequestModel.findById(leaveId);
+  if (!leave) throw new ApiError(404, "Leave request not found");
+  if (leave.status !== LEAVE_REQUEST_STATUS.PENDING) {
+    throw new ApiError(409, "Only pending leave requests can be edited");
+  }
+
+  const leaveType = input.leaveType ?? leave.leaveType;
+  const startDate = input.startDate ?? leave.startDate;
+  const endDate = input.endDate ?? leave.endDate;
+  const isHalfDay = input.isHalfDay ?? leave.isHalfDay;
+  const reason = input.reason ?? leave.reason;
+
+  if (startDate > endDate) {
+    throw new ApiError(400, "Start date must be before or equal to the end date");
+  }
+  if (isHalfDay && startDate !== endDate) {
+    throw new ApiError(400, "A half-day leave request can only be for a single date");
+  }
+
+  const employee = await UserModel.findById(leave.employee);
+  if (!employee) throw new ApiError(404, "Employee not found");
+
+  const joiningDateStr = getISTDateString(employee.joiningDate);
+  if (startDate < joiningDateStr) {
+    throw new ApiError(400, "Cannot set a date before the employee's joining date");
+  }
+
+  if (
+    (leaveType === LEAVE_TYPES.CASUAL_PAID || leaveType === LEAVE_TYPES.ANNUAL) &&
+    employee.employmentType !== EMPLOYMENT_TYPE.PERMANENT
+  ) {
+    throw new ApiError(
+      403,
+      `${LEAVE_TYPE_LABELS[leaveType]} leave is only available to Permanent employees`
+    );
+  }
+
+  const overlap = await LeaveRequestModel.findOne({
+    _id: { $ne: leave._id },
+    employee: leave.employee,
+    status: { $in: [LEAVE_REQUEST_STATUS.PENDING, LEAVE_REQUEST_STATUS.APPROVED] },
+    startDate: { $lte: endDate },
+    endDate: { $gte: startDate },
+  });
+  if (overlap) {
+    throw new ApiError(
+      409,
+      "This employee already has another pending or approved leave request overlapping these dates"
+    );
+  }
+
+  const policy = getLeavePolicy();
+  if (leaveType === LEAVE_TYPES.UNPAID && !policy.unpaidAllowed) {
+    throw new ApiError(403, "Unpaid leave is not permitted under the current leave policy");
+  }
+
+  const typePolicy = getLeaveTypePolicy(leaveType, policy);
+  let days = await computeLeaveWorkingDays(startDate, endDate, typePolicy.includeWeekends ?? false);
+  if (days <= 0) {
+    throw new ApiError(
+      400,
+      "The selected range doesn't include any working days (weekends/holidays only)"
+    );
+  }
+
+  if (isHalfDay) {
+    days = 0.5;
+  } else {
+    if (typePolicy.minDurationDays !== null && days < typePolicy.minDurationDays) {
+      throw new ApiError(400, `Leave must be at least ${typePolicy.minDurationDays} working day(s)`);
+    }
+    if (days > typePolicy.maxDurationDays) {
+      throw new ApiError(400, `Leave cannot exceed ${typePolicy.maxDurationDays} working day(s)`);
+    }
+  }
+
+  if (days > 2 && leaveType !== LEAVE_TYPES.UNPAID) {
+    throw new ApiError(
+      400,
+      "Leaves longer than 2 working days cannot be taken as paid leave. Please select Unpaid Leave."
+    );
+  }
+
+  if (leaveType === LEAVE_TYPES.CASUAL_PAID) {
+    const startMonthPrefix = startDate.slice(0, 7);
+    const existingCasualInMonth = await LeaveRequestModel.findOne({
+      _id: { $ne: leave._id },
+      employee: leave.employee,
+      leaveType: LEAVE_TYPES.CASUAL_PAID,
+      status: { $in: [LEAVE_REQUEST_STATUS.PENDING, LEAVE_REQUEST_STATUS.APPROVED] },
+      startDate: { $regex: `^${startMonthPrefix}` },
+    });
+    if (existingCasualInMonth) {
+      throw new ApiError(
+        400,
+        "This employee has already applied for or taken casual leave this month"
+      );
+    }
+  }
+
+  if (leaveType !== LEAVE_TYPES.UNPAID) {
+    const year = Number(startDate.slice(0, 4));
+    const balance = await getLeaveBalance(String(leave.employee), year);
+    const half = leaveHalf(startDate) === "H1" ? "half1" : "half2";
+    const relevant =
+      leaveType === LEAVE_TYPES.SICK
+        ? balance.sick[half]
+        : leaveType === LEAVE_TYPES.CASUAL_PAID
+          ? balance.casualPaid[half]
+          : leaveType === LEAVE_TYPES.COMP_OFF
+            ? balance.compOff
+            : balance.annual;
+    if (relevant.remaining !== null && days > relevant.remaining) {
+      throw new ApiError(
+        409,
+        `Insufficient leave balance: ${relevant.remaining} day(s) available, ${days} requested`
+      );
+    }
+  }
+
+  leave.leaveType = leaveType;
+  leave.startDate = startDate;
+  leave.endDate = endDate;
+  leave.isHalfDay = isHalfDay;
+  leave.days = days;
+  leave.reason = reason;
+  await leave.save();
+
+  await recordActivity({
+    actor: admin,
+    action: ACTIVITY_ACTIONS.LEAVE_EDITED_BY_ADMIN,
+    targetType: "LeaveRequest",
+    targetId: toId(leave),
+    metadata: { leaveType, startDate, endDate, isHalfDay, days },
   });
 
   return toPublicLeave(leave);

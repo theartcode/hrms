@@ -76,6 +76,7 @@ export const API_ENDPOINTS = {
     CANCEL: (id: string) => `/leaves/${id}/cancel`,
     ADMIN_LIST: "/leaves",
     ADMIN_MARK_DAY: "/leaves/admin/mark-day",
+    ADMIN_EDIT: (id: string) => `/leaves/${id}`,
     APPROVE: (id: string) => `/leaves/${id}/approve`,
     REJECT: (id: string) => `/leaves/${id}/reject`,
     ALLOCATIONS: "/leaves/allocations",

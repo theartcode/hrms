@@ -166,15 +166,19 @@ export function LeaveBalanceCard({ employeeId }: LeaveBalanceCardProps) {
               colorClass="bg-blue-500"
               firstHalfOver={data?.firstHalfOver ?? false}
             />
-            <LeaveTypeSection
-              label="Casual Leave"
-              half1={data?.casualPaid.half1 ?? { used: 0, total: 0, remaining: 0 }}
-              half2={data?.casualPaid.half2 ?? { used: 0, total: 0, remaining: 0 }}
-              colorClass="bg-emerald-500"
-              firstHalfOver={data?.firstHalfOver ?? false}
-            />
-            {/* Annual Leave only accrues once Permanent — the row simply
-                doesn't exist for a Probation employee. */}
+            {/* Casual and Annual Leave are Permanent-employee benefits — a
+                Probation employee can't apply for either yet (see
+                apply-leave-dialog.tsx / leave.service.ts's applyLeave), so
+                the rows simply don't exist for them. */}
+            {data?.employmentType === "PERMANENT" && (
+              <LeaveTypeSection
+                label="Casual Leave"
+                half1={data?.casualPaid.half1 ?? { used: 0, total: 0, remaining: 0 }}
+                half2={data?.casualPaid.half2 ?? { used: 0, total: 0, remaining: 0 }}
+                colorClass="bg-emerald-500"
+                firstHalfOver={data?.firstHalfOver ?? false}
+              />
+            )}
             {data?.employmentType === "PERMANENT" && (
               <SimpleLeaveRow
                 label="Annual Leave"
