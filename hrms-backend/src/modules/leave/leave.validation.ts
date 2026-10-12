@@ -61,6 +61,7 @@ export const markDayAsLeaveSchema = z.object({
     employeeId: objectId,
     date: dateString,
     leaveType: z.enum(Object.values(LEAVE_TYPES) as [string, ...string[]]),
+    isHalfDay: z.coerce.boolean().optional(),
     reason: z.string().trim().max(500).optional(),
   }),
 });

@@ -32,6 +32,26 @@ const IST_TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
   hour12: false,
 });
 
+// Same composite "TYPE" / "TYPE:HALF" dropdown-value scheme used in
+// apply-leave-dialog.tsx / edit-leave-request-dialog.tsx — unfiltered here
+// (admin tool; eligibility is enforced server-side in adminMarkDayAsLeave).
+const HALF_SUFFIX = ":HALF";
+
+function parseLeaveTypeOption(option: string): { leaveType: string; isHalfDay: boolean } {
+  if (option.endsWith(HALF_SUFFIX)) {
+    return { leaveType: option.slice(0, -HALF_SUFFIX.length), isHalfDay: true };
+  }
+  return { leaveType: option, isHalfDay: false };
+}
+
+const LEAVE_TYPE_OPTIONS = Object.values(LEAVE_TYPES).flatMap((t) => [
+  { value: t, label: LEAVE_TYPE_LABELS[t] ?? t },
+  { value: `${t}${HALF_SUFFIX}`, label: `Half Day ${LEAVE_TYPE_LABELS[t] ?? t}` },
+]);
+const LEAVE_TYPE_OPTION_LABELS = Object.fromEntries(
+  LEAVE_TYPE_OPTIONS.map((o) => [o.value, o.label])
+);
+
 function toHHMM(iso: string | null): string {
   if (!iso) return "";
   return IST_TIME_FORMATTER.format(new Date(iso));
@@ -53,7 +73,7 @@ export function AdminEditAttendanceDialog({ employeeId, day, onClose }: AdminEdi
   const [mode, setMode] = useState<"times" | "leave">("times");
   const [checkInTime, setCheckInTime] = useState("");
   const [checkOutTime, setCheckOutTime] = useState("");
-  const [leaveType, setLeaveType] = useState<string>(LEAVE_TYPES.CASUAL_PAID);
+  const [leaveTypeOption, setLeaveTypeOption] = useState<string>(LEAVE_TYPES.CASUAL_PAID);
   const [leaveReason, setLeaveReason] = useState("");
   const [lastDay, setLastDay] = useState<DayStatusEntry | null>(null);
 
@@ -62,7 +82,7 @@ export function AdminEditAttendanceDialog({ employeeId, day, onClose }: AdminEdi
     setCheckInTime(day ? toHHMM(day.checkIn) : "");
     setCheckOutTime(day ? toHHMM(day.checkOut) : "");
     setMode("times");
-    setLeaveType(LEAVE_TYPES.CASUAL_PAID);
+    setLeaveTypeOption(LEAVE_TYPES.CASUAL_PAID);
     setLeaveReason("");
   }
 
@@ -95,10 +115,12 @@ export function AdminEditAttendanceDialog({ employeeId, day, onClose }: AdminEdi
   const leaveMutation = useMutation({
     mutationFn: () => {
       if (!day) throw new Error("No day selected");
+      const parsed = parseLeaveTypeOption(leaveTypeOption);
       return leaveService.adminMarkDayAsLeave({
         employeeId,
         date: day.date,
-        leaveType,
+        leaveType: parsed.leaveType,
+        isHalfDay: parsed.isHalfDay,
         reason: leaveReason || undefined,
       });
     },
@@ -173,14 +195,14 @@ export function AdminEditAttendanceDialog({ employeeId, day, onClose }: AdminEdi
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="admin-leave-type">Leave Type</Label>
-              <Select value={leaveType} onValueChange={(v) => v && setLeaveType(v)}>
-                <SelectTrigger id="admin-leave-type">
-                  <SelectValue />
+              <Select value={leaveTypeOption} onValueChange={(v) => v && setLeaveTypeOption(v)}>
+                <SelectTrigger id="admin-leave-type" className="w-full">
+                  <SelectValue>{(v: string) => LEAVE_TYPE_OPTION_LABELS[v]}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.values(LEAVE_TYPES).map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {LEAVE_TYPE_LABELS[type] ?? type}
+                  {LEAVE_TYPE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
                     </SelectItem>
                   ))}
                 </SelectContent>

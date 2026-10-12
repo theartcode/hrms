@@ -778,7 +778,8 @@ export async function adminMarkDayAsLeave(
   employeeId: string,
   date: string,
   leaveType: LeaveType,
-  reason?: string
+  reason?: string,
+  isHalfDay?: boolean
 ) {
   const employee = await UserModel.findById(employeeId);
   if (!employee) throw new ApiError(404, "Employee not found");
@@ -810,12 +811,16 @@ export async function adminMarkDayAsLeave(
   }
 
   const typePolicy = getLeaveTypePolicy(leaveType, policy);
-  const days = await computeLeaveWorkingDays(date, date, typePolicy.includeWeekends ?? false);
+  let days = await computeLeaveWorkingDays(date, date, typePolicy.includeWeekends ?? false);
   if (days <= 0) {
     throw new ApiError(400, "This date is a weekend or holiday — it doesn't need to be marked as leave");
   }
 
-  if (typePolicy.minDurationDays !== null && days < typePolicy.minDurationDays) {
+  // A half day is a fixed, minimal unit of its own — not subject to the
+  // type's minimum-duration policy, same as applyLeave/adminEditLeaveRequest.
+  if (isHalfDay) {
+    days = 0.5;
+  } else if (typePolicy.minDurationDays !== null && days < typePolicy.minDurationDays) {
     throw new ApiError(
       400,
       `${LEAVE_TYPE_LABELS[leaveType]} leave must be at least ${typePolicy.minDurationDays} working day(s)`
@@ -841,6 +846,7 @@ export async function adminMarkDayAsLeave(
     startDate: date,
     endDate: date,
     days,
+    isHalfDay: isHalfDay ?? false,
     reason: reason?.trim() || "Marked by admin",
     status: LEAVE_REQUEST_STATUS.PENDING,
   });
@@ -850,7 +856,7 @@ export async function adminMarkDayAsLeave(
     action: ACTIVITY_ACTIONS.LEAVE_MARKED_BY_ADMIN,
     targetType: "LeaveRequest",
     targetId: toId(leave),
-    metadata: { employeeId, leaveType, date },
+    metadata: { employeeId, leaveType, date, isHalfDay: isHalfDay ?? false },
   });
 
   let approved;

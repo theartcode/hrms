@@ -41,6 +41,7 @@ export interface AdminMarkDayAsLeaveInput {
   date: string;
   leaveType: string;
   reason?: string;
+  isHalfDay?: boolean;
 }
 
 export function adminMarkDayAsLeave(input: AdminMarkDayAsLeaveInput) {

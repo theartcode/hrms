@@ -8,13 +8,21 @@ async function apply(req: Request, res: Response): Promise<void> {
 }
 
 async function markDay(req: Request, res: Response): Promise<void> {
-  const { employeeId, date, leaveType, reason } = req.body as {
+  const { employeeId, date, leaveType, reason, isHalfDay } = req.body as {
     employeeId: string;
     date: string;
     leaveType: Parameters<typeof leaveService.adminMarkDayAsLeave>[3];
     reason?: string;
+    isHalfDay?: boolean;
   };
-  const leave = await leaveService.adminMarkDayAsLeave(req.user!, employeeId, date, leaveType, reason);
+  const leave = await leaveService.adminMarkDayAsLeave(
+    req.user!,
+    employeeId,
+    date,
+    leaveType,
+    reason,
+    isHalfDay
+  );
   sendSuccess(res, { leave }, "Day marked as leave", 201);
 }
 
